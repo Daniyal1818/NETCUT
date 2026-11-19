@@ -55,6 +55,12 @@ class NetCutHTTPHandler(SimpleHTTPRequestHandler):
             self.send_json_response(200, get_nmap_info())
         elif clean_path == "/api/scanner/samples":
             self.send_json_response(200, SAMPLE_SCANS)
+        elif clean_path == "/api/cve/lookup":
+            from urllib.parse import parse_qs, urlparse
+            query_params = parse_qs(urlparse(self.path).query)
+            cve_id = query_params.get("cve_id", [""])[0]
+            from app.vulnerability import get_cve_details
+            self.send_json_response(200, get_cve_details(cve_id))
         elif clean_path == "/" or clean_path == "":
             self.path = "/index.html"
             super().do_GET()
@@ -113,6 +119,11 @@ class NetCutHTTPHandler(SimpleHTTPRequestHandler):
                 "assessment": assessment,
                 "generated_network": generated_network,
             })
+
+        elif clean_path == "/api/cve/lookup":
+            cve_id = payload.get("cve_id", "")
+            from app.vulnerability import get_cve_details
+            self.send_json_response(200, get_cve_details(cve_id))
 
         else:
             self.send_json_response(404, {"detail": "Endpoint not found."})

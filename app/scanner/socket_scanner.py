@@ -55,7 +55,7 @@ class SocketScanner:
 
         try:
             target_meta = validate_scan_target(target)
-            hosts_to_scan = target_meta["hosts_preview"]
+            hosts_to_scan = target_meta.get("all_hosts") or target_meta.get("hosts_preview") or [target]
         except ScanTargetError as ex:
             return ScanResult(
                 target=target,

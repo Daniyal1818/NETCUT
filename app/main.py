@@ -31,6 +31,7 @@ from app.scanner.sample_scans import SAMPLE_SCANS
 from app.vulnerability import (
     assess_network_hosts,
     convert_assessment_to_network,
+    get_cve_details,
 )
 
 try:
@@ -403,6 +404,14 @@ if FASTAPI_AVAILABLE:
             "assessment": assessment,
             "generated_network": generated_network,
         }
+
+    @app.get("/api/cve/lookup")
+    def cve_lookup_get(cve_id: str = "") -> Dict[str, Any]:
+        return get_cve_details(cve_id)
+
+    @app.post("/api/cve/lookup")
+    def cve_lookup_post(payload: Dict[str, str]) -> Dict[str, Any]:
+        return get_cve_details(payload.get("cve_id", ""))
 
     static_path = os.path.join(BASE_DIR, "static")
     if os.path.exists(static_path):

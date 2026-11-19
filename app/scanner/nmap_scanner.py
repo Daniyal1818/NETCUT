@@ -60,7 +60,10 @@ class NmapScanner:
         self.nmap_path = nmap_path or find_nmap_binary()
 
     def is_available(self) -> bool:
-        return self.nmap_path is not None
+        if not self.nmap_path:
+            return False
+        import shutil
+        return os.path.isfile(self.nmap_path) or (shutil.which(self.nmap_path) is not None)
 
     def scan(
         self,

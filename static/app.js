@@ -107,9 +107,20 @@
     findingsContainer: $("findingsContainer"),
     btnImportScanToGraph: $("btnImportScanToGraph"),
     kpiDiscoveredCount: $("kpiDiscoveredCount"),
+    kpiAssessedCount: $("kpiAssessedCount"),
     kpiOpenPortsCount: $("kpiOpenPortsCount"),
     kpiTotalFindings: $("kpiTotalFindings"),
     kpiCritCount: $("kpiCritCount"),
+    kpiHighCount: $("kpiHighCount"),
+    kpiMedCount: $("kpiMedCount"),
+    kpiLowCount: $("kpiLowCount"),
+    scanConsoleLog: $("scanConsoleLog"),
+    btnClearScanLog: $("btnClearScanLog"),
+    cveLookupInput: $("cveLookupInput"),
+    btnLookupCve: $("btnLookupCve"),
+    cveLookupResult: $("cveLookupResult"),
+    pathVulnHosts: $("pathVulnHosts"),
+    toastContainer: $("toastContainer"),
 
     // Topology Studio
     nodeName: $("nodeName"),
@@ -261,11 +272,37 @@
         }
       },
       {
+        selector: "node.path-node",
+        style: {
+          "border-color": "var(--accent-primary)",
+          "border-width": 3.5,
+          "overlay-color": "var(--accent-primary)",
+          "overlay-opacity": 0.28,
+          "overlay-padding": 8
+        }
+      },
+      {
+        selector: "node:hover",
+        style: {
+          "overlay-color": "var(--accent-primary)",
+          "overlay-opacity": 0.16,
+          "overlay-padding": 6
+        }
+      },
+      {
         selector: ":selected",
         style: {
           "overlay-color": "var(--accent-primary)",
-          "overlay-opacity": 0.22,
+          "overlay-opacity": 0.25,
           "overlay-padding": 6
+        }
+      },
+      {
+        selector: "edge:hover",
+        style: {
+          "line-color": "var(--accent-primary)",
+          "target-arrow-color": "var(--accent-primary)",
+          width: 3.2
         }
       },
       {
@@ -301,21 +338,65 @@
     ]
   });
 
+  // --- Toast Notification System ---
+  function showToast(message, type = "info", duration = 3200) {
+    if (!elements.toastContainer) return;
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    let iconSvg = "";
+    if (type === "success") {
+      iconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>`;
+    } else if (type === "error") {
+      iconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+    } else if (type === "warning") {
+      iconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+    } else {
+      iconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+    }
+    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
+    elements.toastContainer.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateY(8px) scale(0.95)";
+      setTimeout(() => toast.remove(), 260);
+    }, duration);
+  }
+
+  // --- Terminal Scan Console Activity Stream ---
+  function logScanTerminal(message, level = "info") {
+    if (!elements.scanConsoleLog) return;
+    const timeStr = new Date().toLocaleTimeString();
+    const line = document.createElement("div");
+    line.className = `terminal-line ${level}`;
+    line.textContent = `[${timeStr}] ${message}`;
+    elements.scanConsoleLog.appendChild(line);
+    elements.scanConsoleLog.scrollTop = elements.scanConsoleLog.scrollHeight;
+  }
+
   // --- Theme Management ---
   function initTheme() {
     const saved = localStorage.getItem("netcut-theme") || "cyan";
-    applyTheme(saved);
+    applyTheme(saved, false);
     if (elements.themeSelect) {
       elements.themeSelect.value = saved;
       elements.themeSelect.addEventListener("change", (e) => {
-        applyTheme(e.target.value);
+        applyTheme(e.target.value, true);
       });
     }
   }
 
-  function applyTheme(themeName) {
+  function applyTheme(themeName, notify = true) {
     document.documentElement.setAttribute("data-theme", themeName);
     localStorage.setItem("netcut-theme", themeName);
+    if (notify) {
+      const titles = {
+        cyan: "Cyber Cyan (Futuristic SOC)",
+        violet: "Neon Violet (Cyberpunk)",
+        emerald: "Emerald Ops (Tactical Green)",
+        crimson: "Crimson Alert (High Threat)"
+      };
+      showToast(`Visual Theme: ${titles[themeName] || themeName}`, "info");
+    }
   }
 
   // --- Scanner Dependency Check ---
@@ -350,7 +431,7 @@
   }
 
   function clearHighlights() {
-    cy.elements().removeClass("path cut removed partition-s partition-t");
+    cy.elements().removeClass("path cut removed partition-s partition-t path-node");
   }
 
   // --- Select Dropdown Management ---
@@ -584,11 +665,13 @@
     const target = elements.scanTargetInput.value.trim();
     if (!target) {
       showAlert("Please enter a valid IP address or CIDR range (e.g. 192.168.1.0/24).", "warning");
+      showToast("Scan target cannot be empty", "warning");
       return;
     }
 
     showAlert("");
     startScanProgressBar();
+    logScanTerminal(`Initiating network scan on target '${target}' [Profile: ${elements.scanProfileSelect.value}]...`, "info");
 
     try {
       const payload = {
@@ -613,10 +696,13 @@
 
       const data = await resp.json();
       latestAssessment = data;
+      logScanTerminal(`Scan completed in ${data.scan?.duration_s || 0}s via engine ${(data.engine_used || data.scan?.engine || 'nmap').toUpperCase()}`, "success");
       renderScanResults(data);
     } catch (err) {
       stopScanProgressBar();
       showAlert(`Scan failed: ${err.message}`, "error");
+      logScanTerminal(`Scan error: ${err.message}`, "critical");
+      showToast(`Scan failed: ${err.message}`, "error");
     }
   }
 
@@ -624,6 +710,7 @@
     showAlert("");
     const key = elements.sampleScanSelect.value;
     startScanProgressBar();
+    logScanTerminal(`Loading benchmark dataset: '${key}'...`, "info");
 
     try {
       const resp = await fetch("/api/scanner/load-sample", {
@@ -641,10 +728,13 @@
 
       const data = await resp.json();
       latestAssessment = data;
+      logScanTerminal(`Benchmark dataset '${key}' loaded successfully. Assessment completed.`, "success");
       renderScanResults(data);
     } catch (err) {
       stopScanProgressBar();
       showAlert(`Failed to load dataset: ${err.message}`, "error");
+      logScanTerminal(`Failed to load dataset: ${err.message}`, "critical");
+      showToast(`Load dataset error: ${err.message}`, "error");
     }
   }
 
@@ -679,11 +769,26 @@
     // Engine Badge
     elements.scanEngineBadge.textContent = `Engine: ${(data.engine_used || scan.engine || "nmap").toUpperCase()}`;
 
-    // KPI summary
+    // KPI summary (8 metrics)
     elements.kpiDiscoveredCount.textContent = assessment.hosts_discovered || hosts.length;
+    if (elements.kpiAssessedCount) elements.kpiAssessedCount.textContent = assessment.hosts_assessed || hosts.length;
     elements.kpiOpenPortsCount.textContent = scan.open_ports_count || hosts.reduce((acc, h) => acc + (h.open_ports_count || 0), 0);
     elements.kpiTotalFindings.textContent = assessment.total_findings || findings.length;
     elements.kpiCritCount.textContent = assessment.critical_count || 0;
+    if (elements.kpiHighCount) elements.kpiHighCount.textContent = assessment.high_count || 0;
+    if (elements.kpiMedCount) elements.kpiMedCount.textContent = assessment.medium_count || 0;
+    if (elements.kpiLowCount) elements.kpiLowCount.textContent = (assessment.low_count || 0) + (assessment.info_count || 0);
+
+    // Terminal Activity Stream
+    logScanTerminal(`Discovered ${hosts.length} active hosts, ${scan.open_ports_count || 0} open services.`, "info");
+    if (assessment.critical_count > 0) {
+      logScanTerminal(`CRITICAL ALERT: ${assessment.critical_count} critical CVSS 9.0+ vulnerabilities matched!`, "critical");
+    }
+    if (assessment.high_count > 0) {
+      logScanTerminal(`HIGH SEVERITY: ${assessment.high_count} high-risk exposures flagged.`, "warning");
+    }
+    logScanTerminal(`Assessment summary: ${findings.length} findings evaluated. Ready for graph integration.`, "success");
+    showToast(`Assessment ready: ${hosts.length} hosts, ${findings.length} findings (${assessment.critical_count || 0} Critical)`, assessment.critical_count > 0 ? "error" : "success");
 
     // Discovered Hosts Table
     let hostsHtml = "";
@@ -820,6 +925,11 @@
           <span class="badge badge-${(hostData.max_severity || 'info').toLowerCase()}">${hostData.max_severity || 'Clean'}</span>
           <span style="font-size:11px; color:var(--text-sub); margin-left:6px;">Risk Score: <strong>${hostData.risk_score || 0}</strong></span>
         </div>
+        <div style="display:flex; gap:6px; margin-top:8px;">
+          <button class="btn btn-sm btn-drawer-entry" style="flex:1; padding:4px 6px; font-size:10px;">Set as Entry (s)</button>
+          <button class="btn btn-sm btn-drawer-target" style="flex:1; padding:4px 6px; font-size:10px;">Set as Target (t)</button>
+          <button class="btn btn-sm btn-drawer-focus" style="width:auto; padding:4px 8px; font-size:10px;">Focus</button>
+        </div>
       </div>
       <div>
         <div style="font-size:10px; font-weight:600; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px;">Open Services (${ports.length})</div>
@@ -832,6 +942,36 @@
     `;
 
     elements.hostDrawer.style.display = "flex";
+
+    // Bind drawer action buttons
+    const btnEntry = elements.drawerBody.querySelector(".btn-drawer-entry");
+    if (btnEntry) {
+      btnEntry.addEventListener("click", () => {
+        elements.entry.value = hostData.ip;
+        updateNodeVisuals();
+        runFullPipeline();
+        showToast(`Threat Entry (s) set to ${hostData.ip}`, "info");
+      });
+    }
+    const btnTarget = elements.drawerBody.querySelector(".btn-drawer-target");
+    if (btnTarget) {
+      btnTarget.addEventListener("click", () => {
+        elements.target.value = hostData.ip;
+        updateNodeVisuals();
+        runFullPipeline();
+        showToast(`Crown Jewel Target (t) set to ${hostData.ip}`, "warning");
+      });
+    }
+    const btnFocus = elements.drawerBody.querySelector(".btn-drawer-focus");
+    if (btnFocus) {
+      btnFocus.addEventListener("click", () => {
+        const n = cy.getElementById(hostData.ip);
+        if (n.length) {
+          cy.center(n);
+          cy.zoom(1.6);
+        }
+      });
+    }
   }
 
   elements.btnCloseDrawer.addEventListener("click", () => {
@@ -914,6 +1054,40 @@
     attackDetails.textContent =
       `Dijkstra's Algorithm identified the easiest route: ${res.attack_path.join(" → ")} ` +
       `with cumulative difficulty ${res.attack_difficulty}. An attacker will exploit vulnerable services along this route to reach the target.`;
+
+    // Render Vulnerable Hosts on Path
+    if (elements.pathVulnHosts) {
+      let vulnHtml = "";
+      res.attack_path.forEach((nodeId, idx) => {
+        const node = cy.getElementById(nodeId);
+        const meta = node.length ? node.data("metadata") || {} : {};
+        const findings = meta.findings || [];
+        const maxSev = meta.max_severity || (nodeId === elements.entry.value ? "Clean" : (nodeId === elements.target.value ? "Clean" : "Clean"));
+        const cardClass = maxSev !== "Clean" ? maxSev.toLowerCase() : "clean";
+
+        const cveBadges = findings
+          .filter(f => f.cve_id && f.cve_id !== "N/A" && f.cve_id !== "INFO-PORT")
+          .map(f => `<span class="badge badge-${(f.severity || 'info').toLowerCase()}" style="font-size:9px; cursor:pointer;" onclick="window.NetCutLookupCve && window.NetCutLookupCve('${f.cve_id}')">${f.cve_id} (${f.severity})</span>`)
+          .join(" ");
+
+        vulnHtml += `
+          <div class="path-vuln-card ${cardClass}">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-weight:700; color:var(--text-main); font-family:var(--font-mono);">
+                Hop #${idx + 1}: ${nodeId}
+              </span>
+              <span class="badge badge-${(maxSev || 'info').toLowerCase()}">${maxSev}</span>
+            </div>
+            <div style="font-size:11px; color:var(--text-sub); margin-top:3px;">
+              ${meta.hostname && meta.hostname !== nodeId ? `Host: <em>${meta.hostname}</em> &bull; ` : ""}
+              ${nodeId === elements.entry.value ? "Threat Entry Point (s)" : (nodeId === elements.target.value ? "Crown Jewel Target Asset (t)" : `Intermediary Pivot Node &bull; Risk Score: ${meta.risk_score || 0}`)}
+            </div>
+            ${cveBadges ? `<div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:4px;">${cveBadges}</div>` : ""}
+          </div>
+        `;
+      });
+      elements.pathVulnHosts.innerHTML = vulnHtml;
+    }
   }
 
   function renderMinCutTab(res) {
@@ -1067,6 +1241,11 @@
       const v = res.attack_path[i + 1];
       cy.getElementById(`${u}->${v}`).addClass("path");
     }
+
+    // Highlight nodes along the attack path with glowing accent
+    res.attack_path.forEach((nodeId) => {
+      cy.getElementById(nodeId).addClass("path-node");
+    });
   }
 
   function highlightMinCut(res) {
@@ -1313,13 +1492,95 @@ To ensure zero operational vulnerabilities remain, Dijkstra's algorithm was re-e
   elements.btnFit.addEventListener("click", () => cy.fit(undefined, 35));
   elements.btnCenter.addEventListener("click", () => cy.center());
 
+  // --- On-Demand CVE Intelligence Lookup (NVD Database) ---
+  async function performCveLookup(cveQuery) {
+    const query = (cveQuery || (elements.cveLookupInput ? elements.cveLookupInput.value : "")).trim().toUpperCase();
+    if (!query) {
+      showToast("Please enter a CVE ID (e.g. CVE-2024-6387)", "warning");
+      return;
+    }
+    if (elements.cveLookupInput) elements.cveLookupInput.value = query;
+
+    if (elements.btnLookupCve) {
+      elements.btnLookupCve.disabled = true;
+      elements.btnLookupCve.textContent = "Querying...";
+    }
+    if (elements.cveLookupResult) {
+      elements.cveLookupResult.style.display = "block";
+      elements.cveLookupResult.innerHTML = `<div style="color:var(--text-muted); font-size:11px;">Connecting to NIST NVD API &amp; local intelligence base...</div>`;
+    }
+
+    try {
+      const resp = await fetch(`/api/cve/lookup?cve_id=${encodeURIComponent(query)}`);
+      if (elements.btnLookupCve) {
+        elements.btnLookupCve.disabled = false;
+        elements.btnLookupCve.textContent = "Query NVD";
+      }
+
+      if (!resp.ok) throw new Error("CVE lookup request failed");
+      const data = await resp.json();
+
+      const sevClass = `badge-${(data.severity || 'info').toLowerCase()}`;
+      if (elements.cveLookupResult) {
+        elements.cveLookupResult.innerHTML = `
+          <div style="background:rgba(0,0,0,0.45); border:1px solid var(--border-dim); border-left:3px solid var(--sev-${(data.severity || 'info').toLowerCase()}); border-radius:var(--radius-md); padding:10px; font-size:11px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong style="color:var(--text-main); font-size:12px;">${data.cve_id}: ${data.title}</strong>
+              <span class="badge ${sevClass}">${data.severity} (CVSS ${data.cvss || 'N/A'})</span>
+            </div>
+            <div style="color:var(--text-sub); margin-top:6px; line-height:1.45;">
+              ${data.explanation}
+            </div>
+            <div style="margin-top:6px; color:#a7f3d0; background:rgba(52, 211, 153, 0.08); padding:5px 8px; border-radius:4px;">
+              <strong>Remediation:</strong> ${data.remediation}
+            </div>
+            <div style="margin-top:6px; font-size:10px; color:var(--text-muted);">
+              Source: <em>${data.source}</em>
+            </div>
+          </div>
+        `;
+      }
+      showToast(`Intelligence loaded for ${data.cve_id}`, "success");
+    } catch (err) {
+      if (elements.btnLookupCve) {
+        elements.btnLookupCve.disabled = false;
+        elements.btnLookupCve.textContent = "Query NVD";
+      }
+      if (elements.cveLookupResult) {
+        elements.cveLookupResult.innerHTML = `<div style="color:var(--sev-critical); font-size:11px;">Lookup failed: ${err.message}</div>`;
+      }
+      showToast(`Lookup error: ${err.message}`, "error");
+    }
+  }
+
+  // Global helper for inline clicks
+  window.NetCutLookupCve = (cveId) => {
+    document.querySelector('.tab-btn[data-tab="discovery"]')?.click();
+    performCveLookup(cveId);
+  };
+
   // Export Buttons
   elements.btnExportReport.addEventListener("click", generateExecutiveReport);
   elements.btnCloseReport.addEventListener("click", () => elements.reportModal.classList.remove("active"));
   elements.btnCopyReport.addEventListener("click", () => {
     navigator.clipboard.writeText(elements.reportContent.textContent);
-    alert("Report markdown copied to clipboard!");
+    showToast("Report markdown copied to clipboard!", "success");
   });
+
+  // Terminal and CVE bindings
+  if (elements.btnClearScanLog) {
+    elements.btnClearScanLog.addEventListener("click", () => {
+      if (elements.scanConsoleLog) elements.scanConsoleLog.innerHTML = '<div class="terminal-line muted">[SYSTEM] Log stream cleared.</div>';
+    });
+  }
+  if (elements.btnLookupCve) {
+    elements.btnLookupCve.addEventListener("click", () => performCveLookup());
+  }
+  if (elements.cveLookupInput) {
+    elements.cveLookupInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") performCveLookup();
+    });
+  }
   elements.btnDownloadReport.addEventListener("click", () => {
     const blob = new Blob([elements.reportContent.textContent], { type: "text/markdown;charset=utf-8" });
     const a = document.createElement("a");
