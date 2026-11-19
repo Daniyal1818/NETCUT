@@ -118,9 +118,10 @@ def edmonds_karp(
                     q_reach.append(v)
 
     # In the Max-Flow Min-Cut Theorem:
-    # Cut edges are original edges going from the reachable set S to unreachable set T
+    # Cut edges are original edges going from the reachable set S to unreachable set T.
+    # Computed even when max_flow == 0 so that free (cost 0) links are still severed.
     cut: List[Dict[str, Any]] = []
-    if source != sink and max_flow > 0:
+    if source != sink:
         for e in edges:
             if e["src"] in reachable and e["dst"] not in reachable:
                 cut.append(e)
