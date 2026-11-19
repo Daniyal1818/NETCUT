@@ -275,6 +275,81 @@ def test_hardened_network_exists():
     assert len(hn["hosts"]) > 0
 
 
+# ─── Nmap Scanner & Parser Tests ──────────────────────────────────────────────
+
+def test_reject_public_cidr_sweeps():
+    """Sweeping broad public CIDR ranges must be rejected for security and authorization."""
+    try:
+        validate_scan_target("8.8.8.0/24")
+        assert False, "Should have rejected public CIDR subnet"
+    except ScanTargetError as ex:
+        assert "public" in str(ex).lower()
+
+
+def test_nmap_scanner_missing_binary_returns_failure():
+    """When nmap binary is missing, scan() must cleanly return success=False."""
+    from app.scanner.nmap_scanner import NmapScanner
+    scanner = NmapScanner(nmap_path="/nonexistent/bin/nmap_fake")
+    assert scanner.is_available() is False
+    res = scanner.scan("192.168.1.1")
+    assert res.success is False
+    assert "not installed" in res.error_message.lower() or "not in path" in res.error_message.lower()
+
+
+def test_nmap_xml_parser_valid_output():
+    """Verify Nmap XML parsing extracts only up hosts, ports, services, and versions."""
+    from app.scanner.nmap_scanner import NmapScanner
+    sample_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun scanner="nmap" version="7.94">
+  <host>
+    <status state="up"/>
+    <address addr="192.168.1.50" addrtype="ipv4"/>
+    <hostnames><hostname name="gateway.local"/></hostnames>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open"/>
+        <service name="ssh" product="OpenSSH" version="8.9p1" extrainfo="Ubuntu"/>
+      </port>
+      <port protocol="tcp" portid="80">
+        <state state="open"/>
+        <service name="http" product="Apache httpd" version="2.4.49"/>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="closed"/>
+      </port>
+    </ports>
+  </host>
+  <host>
+    <status state="down"/>
+    <address addr="192.168.1.51" addrtype="ipv4"/>
+  </host>
+</nmaprun>"""
+    scanner = NmapScanner()
+    hosts = scanner._parse_nmap_xml(sample_xml)
+    assert len(hosts) == 1
+    assert hosts[0]["ip"] == "192.168.1.50"
+    assert hosts[0]["hostname"] == "gateway.local"
+    assert len(hosts[0]["ports"]) == 2
+    ports = [p["port"] for p in hosts[0]["ports"]]
+    assert 22 in ports and 80 in ports
+    assert 443 not in ports  # closed port excluded
+
+
+def test_nmap_xml_parser_empty_string():
+    from app.scanner.nmap_scanner import NmapScanner
+    scanner = NmapScanner()
+    assert scanner._parse_nmap_xml("") == []
+    assert scanner._parse_nmap_xml("   ") == []
+
+
+def test_socket_scanner_invalid_target_fails_safely():
+    from app.scanner.socket_scanner import SocketScanner
+    scanner = SocketScanner()
+    res = scanner.scan("invalid;target")
+    assert res.success is False
+    assert "dangerous" in res.error_message.lower() or "shell" in res.error_message.lower()
+
+
 if __name__ == "__main__":
     import sys
     tests = [v for k, v in globals().items() if k.startswith("test_") and callable(v)]

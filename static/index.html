@@ -169,9 +169,25 @@
                 <div class="scan-progress-fill"></div>
               </div>
             </div>
+
+            <!-- Terminal-inspired Scan Activity Stream -->
+            <div class="terminal-card">
+              <div class="terminal-header">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="terminal-dot red"></span>
+                  <span class="terminal-dot yellow"></span>
+                  <span class="terminal-dot green"></span>
+                  <span class="terminal-title">LIVE SCAN CONSOLE &bull; ACTIVITY STREAM</span>
+                </div>
+                <button id="btnClearScanLog" class="terminal-btn" title="Clear Activity Log">Clear</button>
+              </div>
+              <div id="scanConsoleLog" class="terminal-body">
+                <div class="terminal-line muted">[READY] Scanner initialized. Safe subnet discovery and CVE assessment engine online.</div>
+              </div>
+            </div>
           </div>
 
-          <!-- Assessment Summary KPI Grid -->
+          <!-- Comprehensive 8-Metric Security KPI Grid -->
           <div class="metric-grid-4">
             <div class="metric-card">
               <span class="metric-label">Discovered</span>
@@ -179,19 +195,42 @@
               <span class="metric-sub">Active Hosts</span>
             </div>
             <div class="metric-card">
-              <span class="metric-label">Open Ports</span>
-              <span id="kpiOpenPortsCount" class="metric-value">0</span>
-              <span class="metric-sub">Services Active</span>
+              <span class="metric-label">Assessed</span>
+              <span id="kpiAssessedCount" class="metric-value info">0</span>
+              <span class="metric-sub">Evaluated Nodes</span>
             </div>
             <div class="metric-card">
-              <span class="metric-label">Total CVEs</span>
-              <span id="kpiTotalFindings" class="metric-value critical">0</span>
-              <span class="metric-sub">Vulnerabilities</span>
+              <span class="metric-label">Open Ports</span>
+              <span id="kpiOpenPortsCount" class="metric-value">0</span>
+              <span class="metric-sub">Identified Services</span>
             </div>
+            <div class="metric-card">
+              <span class="metric-label">Total Findings</span>
+              <span id="kpiTotalFindings" class="metric-value critical">0</span>
+              <span class="metric-sub">Vulnerabilities &amp; Alerts</span>
+            </div>
+          </div>
+
+          <div class="metric-grid-4">
             <div class="metric-card">
               <span class="metric-label">Critical</span>
               <span id="kpiCritCount" class="metric-value critical">0</span>
               <span class="metric-sub">CVSS 9.0 - 10.0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">High Risk</span>
+              <span id="kpiHighCount" class="metric-value high">0</span>
+              <span class="metric-sub">CVSS 7.0 - 8.9</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Medium</span>
+              <span id="kpiMedCount" class="metric-value medium">0</span>
+              <span class="metric-sub">CVSS 4.0 - 6.9</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Low / Info</span>
+              <span id="kpiLowCount" class="metric-value low">0</span>
+              <span class="metric-sub">Exposure &amp; Ports</span>
             </div>
           </div>
 
@@ -253,6 +292,20 @@
                 Run discovery scan to populate vulnerability findings.
               </div>
             </div>
+          </div>
+
+          <!-- Real-Time CVE Intelligence Lookup (NVD Database) -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">CVE Intelligence Lookup (NVD Database)</span>
+              <span class="badge badge-accent">NIST NVD API 2.0</span>
+            </div>
+            <div class="card-desc">Query live NIST National Vulnerability Database or local curated signatures for any CVE identifier.</div>
+            <div class="form-row" style="margin-top:6px;">
+              <input id="cveLookupInput" type="text" placeholder="e.g. CVE-2024-6387 or CVE-2021-41773" autocomplete="off">
+              <button id="btnLookupCve" class="btn btn-sm" style="width:auto; min-width:110px;">Query NVD</button>
+            </div>
+            <div id="cveLookupResult" style="margin-top:8px; display:none;"></div>
           </div>
         </div>
 
@@ -385,6 +438,16 @@
             </div>
             <div id="attackTimeline" class="timeline">
               <div style="color:var(--text-muted); font-size:12px;">Run analysis to expose attack progression.</div>
+            </div>
+          </div>
+
+          <!-- Vulnerable Hosts on Path -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Vulnerable Hosts on Calculated Path</span>
+            </div>
+            <div id="pathVulnHosts" class="path-vuln-list">
+              <div style="color:var(--text-muted); font-size:12px;">Execute shortest path analysis to inspect vulnerable hosts traversed by the attacker.</div>
             </div>
           </div>
         </div>
@@ -667,6 +730,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Toast Notifications Container -->
+  <div id="toastContainer" class="toast-container"></div>
 
   <script src="algorithms.js"></script>
   <script src="app.js"></script>

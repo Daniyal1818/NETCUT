@@ -70,11 +70,19 @@ def validate_scan_target(target_input: str) -> Dict[str, Any]:
             if net.prefixlen < 120:
                 raise ScanTargetError("IPv6 subnet is too broad. Please specify at least a /120.")
 
+        # Safeguard: disallow sweeping public CIDR subnet ranges
+        is_priv = net.is_private or net.is_loopback or net.is_link_local
+        if not is_priv:
+            raise ScanTargetError(
+                "Scanning public CIDR subnets is restricted for safety and authorization compliance. "
+                "Only private subnets (RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, or loopback 127.0.0.0/8) or a single authorized IP may be scanned."
+            )
+
         num_hosts = net.num_addresses
         if num_hosts > MAX_ALLOWED_HOSTS:
             raise ScanTargetError(f"Target contains {num_hosts} hosts, which exceeds maximum safety ceiling of {MAX_ALLOWED_HOSTS}.")
 
-        # Generate a small preview
+        # Generate hosts list
         hosts_list = [str(ip) for ip in net.hosts()]
         if not hosts_list:  # e.g., /32 or /31
             hosts_list = [str(net.network_address)]
@@ -82,20 +90,23 @@ def validate_scan_target(target_input: str) -> Dict[str, Any]:
         return {
             "target": str(net),
             "type": "network",
-            "is_private": net.is_private or net.is_loopback,
+            "is_private": is_priv,
             "host_count": len(hosts_list),
             "hosts_preview": hosts_list[:10],
+            "all_hosts": hosts_list,
         }
 
     # 4. Check if target is a single IP address
     try:
         ip = ipaddress.ip_address(target)
+        is_priv = ip.is_private or ip.is_loopback or ip.is_link_local
         return {
             "target": str(ip),
             "type": "single_ip",
-            "is_private": ip.is_private or ip.is_loopback,
+            "is_private": is_priv,
             "host_count": 1,
             "hosts_preview": [str(ip)],
+            "all_hosts": [str(ip)],
         }
     except ValueError:
         pass
@@ -114,6 +125,7 @@ def validate_scan_target(target_input: str) -> Dict[str, Any]:
             "is_private": target.endswith(".local") or target.endswith(".internal") or target == "localhost",
             "host_count": 1,
             "hosts_preview": [target],
+            "all_hosts": [target],
         }
 
     raise ScanTargetError(f"Target '{target}' is not a valid IP address, CIDR range, or hostname.")
