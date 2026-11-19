@@ -77,7 +77,7 @@ function dijkstraJS(nodes, edges, source, target) {
   for (const n of nodes) adj[n] = [];
   for (const e of edges) {
     if (adj[e.src]) {
-      adj[e.src].push({ dst: e.dst, difficulty: Number(e.difficulty) || 1.0, edge: e });
+      adj[e.src].push({ dst: e.dst, difficulty: (Number.isFinite(Number(e.difficulty)) ? Number(e.difficulty) : 1.0), edge: e });
     }
   }
 
@@ -158,7 +158,7 @@ function edmondsKarpJS(nodes, edges, source, sink) {
   for (const e of edges) {
     const u = e.src;
     const v = e.dst;
-    const c = Number(e.cost) || 1.0;
+    const c = (Number.isFinite(Number(e.cost)) ? Number(e.cost) : 1.0);
     if (res[u] && res[v]) {
       res[u][v] = (res[u][v] || 0) + c;
       if (res[v][u] === undefined) res[v][u] = 0;
@@ -234,7 +234,7 @@ function edmondsKarpJS(nodes, edges, source, sink) {
   }
 
   const cut = [];
-  if (source !== sink && maxFlow > 0) {
+  if (source !== sink) {
     for (const e of edges) {
       if (reachable.has(e.src) && !reachable.has(e.dst)) {
         cut.push(e);
@@ -248,7 +248,7 @@ function edmondsKarpJS(nodes, edges, source, sink) {
   return {
     maxFlow: Number(maxFlow.toFixed(4)),
     cutEdges: cut,
-    cutCost: Number(cut.reduce((s, e) => s + (Number(e.cost) || 1.0), 0).toFixed(4)),
+    cutCost: Number(cut.reduce((s, e) => s + ((Number.isFinite(Number(e.cost)) ? Number(e.cost) : 1.0)), 0).toFixed(4)),
     sourcePartition: Array.from(reachable).sort(),
     targetPartition: targetPartition.sort(),
     augmentingPaths,

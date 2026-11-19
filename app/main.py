@@ -191,11 +191,27 @@ def validate_network(net: Network):
 
 def compute_pipeline(net_dict: Dict[str, Any]) -> Dict[str, Any]:
     nodes = net_dict["nodes"]
-    raw_edges = net_dict["edges"]
+    raw_edges = net_dict.get("edges", [])
     entry = net_dict["entry"]
     target = net_dict["target"]
     budget_val = net_dict.get("budget")
     budget = float(budget_val) if budget_val is not None else float("inf")
+
+    # Input validation (the native server does not use validate_network)
+    if not isinstance(nodes, list) or len(set(nodes)) != len(nodes):
+        raise ValueError("Node identifiers must be a list of unique names.")
+    if entry not in nodes or target not in nodes:
+        raise ValueError("Entry point and target must exist in the node list.")
+    if entry == target:
+        raise ValueError("Entry point and target must be different nodes.")
+    if budget < 0:
+        raise ValueError("Budget cannot be negative.")
+    for e in raw_edges:
+        g = (lambda k, d=None: getattr(e, k, d)) if hasattr(e, "model_dump") else (lambda k, d=None: e.get(k, d))
+        if g("src") not in nodes or g("dst") not in nodes:
+            raise ValueError(f"Link {g('src')} -> {g('dst')} references an unknown host.")
+        if float(g("difficulty", 1.0)) < 0 or float(g("cost", 1.0)) < 0:
+            raise ValueError("Difficulty and cost must be non-negative.")
 
     edges = []
     for e in raw_edges:
