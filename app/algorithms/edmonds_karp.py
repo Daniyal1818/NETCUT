@@ -16,32 +16,8 @@ from collections import deque
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-<<<<<<< HEAD
-BIG = 1e12   # locked (non-blockable) edge ki "infinite" capacity
+BIG = 1e12  # Locked (non-blockable) link capacity threshold
 
-
-def edmonds_karp(nodes, edges, source, sink):
-    res = {n: {} for n in nodes}
-    for e in edges:
-        u, v = e["src"], e["dst"]
-        c = e["cost"] if e.get("blockable", True) else BIG
-        res[u][v] = res[u].get(v, 0) + c
-        res[v].setdefault(u, 0)
-
-    max_flow = 0
-    parent = {source: None}
-    while True:
-        parent = {source: None}
-        q = deque([source])
-        while q and sink not in parent:
-            u = q.popleft()
-            for v, c in res[u].items():
-                if c > 0 and v not in parent:
-                    parent[v] = u
-                    q.append(v)
-        if sink not in parent:
-            break
-=======
 
 def edmonds_karp(
     nodes: List[str],
@@ -55,7 +31,7 @@ def edmonds_karp(
 
     Args:
         nodes: List of all node identifiers.
-        edges: List of edge dictionaries with keys 'src', 'dst', 'difficulty', 'cost'.
+        edges: List of edge dictionaries with keys 'src', 'dst', 'difficulty', 'cost', and optional 'blockable'.
         source: Threat entry node (source s).
         sink: Critical target asset (sink t).
         return_details: If True, returns augmenting path history and partition details.
@@ -72,7 +48,8 @@ def edmonds_karp(
     res: Dict[str, Dict[str, float]] = {n: {} for n in nodes}
     for e in edges:
         u, v = e["src"], e["dst"]
-        c = float(e.get("cost", 1.0))
+        is_blockable = e.get("blockable", True)
+        c = float(e.get("cost", 1.0)) if is_blockable else BIG
         if u in res and v in res:
             res[u][v] = res[u].get(v, 0.0) + c
             res[v].setdefault(u, 0.0)
@@ -80,7 +57,6 @@ def edmonds_karp(
     max_flow = 0.0
     augmenting_paths_trace: List[Dict[str, Any]] = []
     iteration_count = 0
->>>>>>> 18b5934 (major changes)
 
     if source in res and sink in res and source != sink:
         while True:
@@ -143,9 +119,6 @@ def edmonds_karp(
 
     # In the Max-Flow Min-Cut Theorem:
     # Cut edges are original edges going from the reachable set S to unreachable set T
-    # Note: If target is not reachable to begin with, no cuts are necessary.
-    is_initially_reachable = sink not in reachable
-    
     cut: List[Dict[str, Any]] = []
     if source != sink and max_flow > 0:
         for e in edges:

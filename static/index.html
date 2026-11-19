@@ -1,80 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="utf-8">
-  <title>NetCut</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NetCut // Attack-Path Analysis & Min-Cut Defense Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      display: flex;
-      height: 100vh
-    }
-
-    #cy {
-      flex: 1;
-      background: #fafafa
-    }
-
-    #panel {
-      width: 340px;
-      padding: 12px;
-      border-left: 1px solid #ccc;
-      overflow: auto;
-      font-size: 14px
-    }
-
-    fieldset {
-      margin: 0 0 10px;
-      border: 1px solid #ddd;
-      border-radius: 6px
-    }
-
-    legend {
-      font-weight: bold
-    }
-
-    input,
-    select {
-      width: 100%;
-      box-sizing: border-box;
-      margin: 3px 0;
-      padding: 5px
-    }
-
-    .row {
-      display: flex;
-      gap: 6px
-    }
-
-    button {
-      width: 100%;
-      margin: 4px 0;
-      padding: 7px;
-      cursor: pointer
-    }
-
-    #msg {
-      color: #b00;
-      min-height: 18px;
-      margin: 4px 0
-    }
-
-    pre {
-      white-space: pre-wrap;
-      background: #f4f4f4;
-      padding: 8px;
-      border-radius: 6px
-    }
-
-    small {
-      color: #666
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
   <!-- ================= Header ================= -->
@@ -82,8 +17,8 @@
     <div class="brand">
       <div class="brand-icon">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          <path d="M9 12l2 2 4-4" />
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
         </svg>
       </div>
       <div>
@@ -100,8 +35,7 @@
     <div class="header-center">
       <div class="hud-pill">
         <span class="dot"></span>
-        <span class="hud-stat">Topology: <strong id="statNodes">0</strong> Hosts / <strong id="statEdges">0</strong>
-          Links</span>
+        <span class="hud-stat">Topology: <strong id="statNodes">0</strong> Hosts / <strong id="statEdges">0</strong> Links</span>
       </div>
       <div class="hud-pill">
         <span class="hud-stat">Engine: <strong id="statEngine">Initializing...</strong></span>
@@ -117,270 +51,442 @@
       </select>
 
       <button id="btnRunAll" class="btn btn-primary" style="width:auto; padding:6px 14px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polygon points="5 3 19 12 5 21 5 3" />
-        </svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Execute Chained Pipeline
       </button>
 
       <button id="btnExportReport" class="btn btn-sm" style="width:auto;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-        </svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Audit Report
       </button>
     </div>
-    <button id="btnSaveEdge">Add / update edge</button>
-    <small>Edge par click karo to uski values yahan aa jayengi, badal ke dobara dabao.</small>
-    </fieldset>
+  </header>
 
-    <fieldset>
-      <legend>3. Delete</legend>
-      <button id="btnDelete">Selected node/edge delete karo</button>
-      <small>Node ya edge par click karke select karo (Shift + click se kai).</small>
-    </fieldset>
+  <!-- ================= Workspace ================= -->
+  <main id="workspace">
+    <!-- Left Control Console -->
+    <aside id="console">
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="topology">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><line x1="12" y1="9" x2="12" y2="15"/></svg>
+          Topology Studio
+        </button>
+        <button class="tab-btn" data-tab="path">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Attack Vector
+        </button>
+        <button class="tab-btn" data-tab="cut">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+          Min-Cut Defense
+        </button>
+        <button class="tab-btn" data-tab="verify">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Verification
+        </button>
+        <button class="tab-btn" data-tab="inspector">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/></svg>
+          DAA Inspector
+        </button>
+      </nav>
 
-    <fieldset>
-      <legend>4. Attacker aur target</legend>
-      <label>Entry (attacker yahan se shuru)</label>
-      <select id="entry"></select>
-      <label>Target (crown jewel)</label>
-      <select id="target"></select>
-    </fieldset>
+      <div class="tabs-content">
+        <!-- Alert Banner -->
+        <div id="msgAlert" class="alert" style="display:none;"></div>
 
-    <div id="msg"></div>
+        <!-- ================= Tab 1: Topology Studio ================= -->
+        <div id="pane-topology" class="tab-pane active">
+          <!-- Add Host -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                1. Add Network Host
+              </span>
+            </div>
+            <div class="form-row">
+              <input id="nodeName" type="text" placeholder="Host Identifier (e.g. CoreRouter)" autocomplete="off">
+              <button id="btnAddNode" class="btn">Add Host</button>
+            </div>
+          </div>
 
-    <button id="btnPath">A. Find attack path</button>
-    <button id="btnCut">B. Compute min-cut</button>
-    <button id="btnVerify">C. Apply fix &amp; verify</button>
-    <pre id="out"></pre>
+          <!-- Add / Edit Connection -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                2. Connection Parameters
+              </span>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Source Host</label>
+                <select id="edgeFrom"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Destination Host</label>
+                <select id="edgeTo"></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Exploit Difficulty (Dijkstra)</label>
+                <input id="diff" type="number" min="0" step="any" value="2" placeholder="Resistance weight">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Remediation Cost (Min-Cut)</label>
+                <input id="cost" type="number" min="0" step="any" value="4" placeholder="Cut capacity">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Protocol / Exploit Vector Label (Optional)</label>
+              <input id="edgeLabel" type="text" placeholder="e.g. SMB Lateral Move / Port 445">
+            </div>
+            <button id="btnSaveEdge" class="btn">Save / Update Connection</button>
+            <div class="card-desc" style="margin-top:8px; margin-bottom:0;">
+              Tip: Click any edge on the canvas to inspect its parameters and update weights.
+            </div>
+          </div>
 
-    <div class="row">
-      <button id="btnSample">Sample network</button>
-      <button id="btnClear">Sab saaf</button>
+          <!-- Endpoints & Budget -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+                3. Security Boundaries &amp; Budget
+              </span>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Threat Entry Point (Source s)</label>
+                <select id="entry"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Crown Jewel Asset (Sink t)</label>
+                <select id="target"></select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Remediation Budget Limit ($)</label>
+              <input id="budget" type="number" min="0" step="any" placeholder="Optional budget limit (e.g. 15)">
+            </div>
+          </div>
+
+          <!-- Selection & Reset Actions -->
+          <div class="card">
+            <div class="btn-row">
+              <button id="btnDelete" class="btn btn-danger btn-sm">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Delete Selected
+              </button>
+              <button id="btnClear" class="btn btn-sm">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                Clear Network
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= Tab 2: Attack Vector (Dijkstra) ================= -->
+        <div id="pane-path" class="tab-pane">
+          <button id="btnFindPath" class="btn btn-attack">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+            Compute Shortest Attack Path (Dijkstra)
+          </button>
+
+          <div class="metric-grid">
+            <div class="metric-card">
+              <span class="metric-label">Cumulative Exploit Difficulty</span>
+              <span id="kpiDiff" class="metric-value crimson">--</span>
+              <span class="metric-sub">Sum of edge resistance weights</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Exploit Chain Hops</span>
+              <span id="kpiHops" class="metric-value">--</span>
+              <span class="metric-sub">Number of intermediary pivots</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Threat Assessment</span>
+              <span id="kpiFeasibility" class="metric-value" style="font-size:13px;">--</span>
+            </div>
+            <div id="attackDetails" class="card-desc">
+              Execute Dijkstra's algorithm to analyze the path of least resistance from threat entry point to crown jewel asset.
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Step-by-Step Exploit Chain</span>
+            </div>
+            <div id="attackTimeline" class="timeline">
+              <div style="color:var(--text-muted); font-size:12px;">Run analysis to expose attack progression.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= Tab 3: Min-Cut Defense (Edmonds-Karp) ================= -->
+        <div id="pane-cut" class="tab-pane">
+          <button id="btnComputeCut" class="btn btn-defense">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+            Compute Minimum-Cost Cut (Edmonds-Karp)
+          </button>
+
+          <div class="metric-grid">
+            <div class="metric-card">
+              <span class="metric-label">Minimum Defense Cost</span>
+              <span id="kpiCutCost" class="metric-value orange">--</span>
+              <span class="metric-sub">Max-Flow value / Cut Capacity</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Links to Harden / Cut</span>
+              <span id="kpiCutCount" class="metric-value">--</span>
+              <span class="metric-sub">Bottleneck cut edges</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Budget Feasibility Check</span>
+              <span id="kpiBudgetFeasible" class="badge">--</span>
+            </div>
+            <div class="card-desc">
+              Compares the minimum cut cost against the defense budget limit to guarantee operational feasibility.
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Recommended Defensive Severances</span>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Target Link</th>
+                  <th>Cost</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="cutTableBody">
+                <tr><td colspan="4" style="color:var(--text-muted); text-align:center;">No cuts computed yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Network Partitions (S-T Cut)</span>
+            </div>
+            <div style="font-size:12px; line-height:1.6;">
+              <div><strong style="color:var(--crimson);">Compromised Zone (S):</strong> <span id="partitionS">--</span></div>
+              <div style="margin-top:4px;"><strong style="color:var(--emerald);">Protected Enclave (T):</strong> <span id="partitionT">--</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Edmonds-Karp Augmenting Paths</span>
+            </div>
+            <div id="augmentingPathsList">
+              <div style="color:var(--text-muted); font-size:12px;">Trace of BFS augmenting paths and bottleneck capacities.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= Tab 4: Chained Verification ================= -->
+        <div id="pane-verify" class="tab-pane">
+          <button id="btnVerifyDefense" class="btn btn-verify">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Apply Fix &amp; Re-verify Defense (Dijkstra)
+          </button>
+
+          <div id="verifyBanner" class="alert alert-info">
+            Click to apply min-cut severances and verify that the crown jewel is mathematically isolated.
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Before vs After Defense Verification</span>
+            </div>
+            <div class="metric-grid">
+              <div class="metric-card">
+                <span class="metric-label">Pre-Defense Resistance</span>
+                <span id="preDiff" class="metric-value crimson">--</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Post-Defense Resistance</span>
+                <span id="postDiff" class="metric-value emerald">--</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Pre-Defense Active Routes</span>
+                <span id="prePathCount" class="metric-value">--</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Post-Defense Active Routes</span>
+                <span id="postPathCount" class="metric-value emerald">--</span>
+              </div>
+            </div>
+            <div id="verifyDetails" class="card-desc" style="margin-top:8px;"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Decision-Support Workflow</span>
+            </div>
+            <ol style="font-size:12px; color:var(--text-sub); padding-left:18px; line-height:1.7;">
+              <li><strong>Dijkstra (Initial):</strong> Exposes the attacker's path of least resistance.</li>
+              <li><strong>Edmonds-Karp:</strong> Solves max-flow to extract the cheapest bottleneck cut (S-T partition).</li>
+              <li><strong>Severance:</strong> Simulates removing all min-cut links from the active network.</li>
+              <li><strong>Dijkstra (Verification):</strong> Proves target asset distance is now <em>infinity</em>.</li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- ================= Tab 5: DAA Inspector ================= -->
+        <div id="pane-inspector" class="tab-pane">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">DAA Algorithmic Foundations</span>
+            </div>
+            <div id="complexityCard"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Live Execution Benchmark</span>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Algorithm Phase</th>
+                  <th>Time Complexity</th>
+                  <th>Runtime</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Dijkstra Shortest Path</td>
+                  <td>O((V + E) log V)</td>
+                  <td><strong id="runtimeDijkstra" style="color:var(--cyan);">--</strong></td>
+                </tr>
+                <tr>
+                  <td>Edmonds-Karp Max-Flow</td>
+                  <td>O(V · E²)</td>
+                  <td><strong id="runtimeEK" style="color:var(--orange);">--</strong></td>
+                </tr>
+                <tr>
+                  <td>Post-Defense Verification</td>
+                  <td>O((V + E) log V)</td>
+                  <td><strong id="runtimeVerify" style="color:var(--emerald);">--</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Project Team Attribution</span>
+            </div>
+            <div style="font-size:12px; color:var(--text-sub); line-height:1.6;">
+              <div><strong>Team Members:</strong> Muhammad Ibrahim (CT-24144), Muhammad Daniyal Akbar (CT-24145)</div>
+              <div><strong>Course:</strong> Design and Analysis of Algorithms (DAA)</div>
+              <div><strong>Instructor:</strong> Ms. Tooba Sheikh</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center Cytoscape Canvas -->
+    <section id="cy-container">
+      <div id="cy"></div>
+
+      <!-- Canvas Floating Toolbar -->
+      <div class="canvas-hud">
+        <div class="hud-group">
+          <select id="layoutSelect" class="hud-select" title="Canvas Layout Engine">
+            <option value="breadthfirst">Layout: Hierarchical Tree</option>
+            <option value="cose">Layout: Force-Directed (Physics)</option>
+            <option value="concentric">Layout: Concentric Circles</option>
+            <option value="circle">Layout: Circle</option>
+            <option value="grid">Layout: Matrix Grid</option>
+          </select>
+        </div>
+
+        <div class="hud-group">
+          <button id="btnZoomIn" class="hud-btn" title="Zoom In">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </button>
+          <button id="btnZoomOut" class="hud-btn" title="Zoom Out">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </button>
+          <button id="btnFit" class="hud-btn" title="Fit to View">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><polyline points="21 15 21 21 15 21"/><polyline points="3 9 3 3 9 3"/></svg>
+          </button>
+          <button id="btnCenter" class="hud-btn" title="Center Topology">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+
+        <div class="hud-group">
+          <button id="btnExportPng" class="hud-btn" title="Export Topology Snapshot (PNG)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </button>
+          <button id="btnExportJson" class="hud-btn" title="Export Topology (JSON)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Canvas Legend Overlay -->
+      <div class="canvas-legend">
+        <div class="legend-item">
+          <div class="legend-badge entry"></div>
+          <span>Threat Entry Point (s)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-badge target"></div>
+          <span>Crown Jewel (t)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-badge path"></div>
+          <span>Attack Path (Dijkstra)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-badge cut"></div>
+          <span>Min-Cut Edge (Edmonds-Karp)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-badge safe"></div>
+          <span>Enclave Node</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= Executive Audit Report Modal ================= -->
+  <div id="reportModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-size:15px; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          NetCut Executive Security Audit Report
+        </h3>
+        <button id="btnCloseReport" class="hud-btn" style="color:var(--text-muted);">&times;</button>
+      </div>
+      <div class="modal-body">
+        <pre id="reportContent" class="code-block" style="max-height:480px;"></pre>
+      </div>
+      <div class="modal-footer">
+        <button id="btnCopyReport" class="btn btn-sm" style="width:auto;">Copy to Clipboard</button>
+        <button id="btnDownloadReport" class="btn btn-primary btn-sm" style="width:auto;">Download Markdown (.md)</button>
+      </div>
     </div>
-    </div>
+  </div>
 
-    <script>
-      const SAMPLE = {
-        nodes: ["Laptop", "Workstation", "Mail", "FileServer", "AppServer", "DB"],
-        edges: [
-          { src: "Laptop", dst: "Workstation", difficulty: 2, cost: 4 },
-          { src: "Laptop", dst: "Mail", difficulty: 1, cost: 3 },
-          { src: "Workstation", dst: "FileServer", difficulty: 3, cost: 5 },
-          { src: "Mail", dst: "FileServer", difficulty: 4, cost: 2 },
-          { src: "Mail", dst: "AppServer", difficulty: 5, cost: 3 },
-          { src: "FileServer", dst: "DB", difficulty: 2, cost: 6 },
-          { src: "AppServer", dst: "DB", difficulty: 1, cost: 2 }
-        ],
-        entry: "Laptop", target: "DB"
-      };
-
-      const $ = id => document.getElementById(id);
-      const out = $("out");
-      let result = null;
-
-      const cy = cytoscape({
-        container: $("cy"),
-        elements: [],
-        style: [
-          {
-            selector: "node", style: {
-              label: "data(id)", "background-color": "#4a90d9", color: "#222",
-              "text-valign": "bottom", "text-margin-y": 4, "font-size": 12
-            }
-          },
-          { selector: "node.entry", style: { "background-color": "#2e9e5b", "border-width": 3, "border-color": "#14633a" } },
-          { selector: "node.target", style: { "background-color": "#c0392b", "border-width": 3, "border-color": "#7b1f15" } },
-          {
-            selector: "edge", style: {
-              label: "data(label)", "font-size": 10, width: 2, "curve-style": "bezier",
-              "target-arrow-shape": "triangle", "line-color": "#aaa", "target-arrow-color": "#aaa",
-              "text-background-color": "#fafafa", "text-background-opacity": 1,
-              "text-background-padding": 2
-            }
-          },
-          { selector: ":selected", style: { "overlay-color": "#2d6cdf", "overlay-opacity": 0.25 } },
-          { selector: ".path", style: { "line-color": "red", "target-arrow-color": "red", width: 4 } },
-          { selector: ".cut", style: { "line-color": "orange", "target-arrow-color": "orange", width: 4, "line-style": "dashed" } },
-          { selector: ".removed", style: { opacity: 0.15 } }
-        ]
-      });
-
-      function msg(t) { $("msg").textContent = t || ""; }
-
-      function resetResult() {
-        result = null;
-        cy.elements().removeClass("path cut removed");
-        out.textContent = "";
-      }
-
-      function fill(selId, ids, preferred) {
-        const sel = $(selId);
-        const keep = preferred ?? sel.value;
-        sel.innerHTML = "";
-        ids.forEach(i => {
-          const o = document.createElement("option");
-          o.value = o.textContent = i;
-          sel.appendChild(o);
-        });
-        if (ids.includes(keep)) sel.value = keep;
-      }
-
-      function refreshSelects(entry, target) {
-        const ids = cy.nodes().map(n => n.id());
-        fill("edgeFrom", ids);
-        fill("edgeTo", ids);
-        fill("entry", ids, entry);
-        fill("target", ids, target);
-        markEndpoints();
-      }
-
-      function markEndpoints() {
-        cy.nodes().removeClass("entry target");
-        if ($("entry").value) cy.getElementById($("entry").value).addClass("entry");
-        if ($("target").value) cy.getElementById($("target").value).addClass("target");
-      }
-
-      function afterChange() {
-        resetResult();
-        refreshSelects();
-        msg("");
-      }
-
-      function addEdge(src, dst, d, c) {
-        const id = src + "->" + dst;
-        const label = `diff ${d} / cost ${c}`;
-        const ex = cy.getElementById(id);
-        if (ex.length) ex.data({ difficulty: d, cost: c, label });
-        else cy.add({ data: { id, source: src, target: dst, difficulty: d, cost: c, label } });
-      }
-
-      function loadNetwork(n) {
-        cy.elements().remove();
-        n.nodes.forEach(id => cy.add({ data: { id } }));
-        n.edges.forEach(e => addEdge(e.src, e.dst, e.difficulty, e.cost));
-        cy.layout({ name: "breadthfirst", directed: true, roots: cy.getElementById(n.entry), padding: 30 }).run();
-        refreshSelects(n.entry, n.target);
-        resetResult();
-        msg("");
-      }
-
-      function readNum(id, label) {
-        const v = parseFloat($(id).value);
-        if (isNaN(v) || v < 0) { msg(label + " 0 ya us se bara number hona chahiye"); return null; }
-        return v;
-      }
-
-      function currentNetwork() {
-        return {
-          nodes: cy.nodes().map(n => n.id()),
-          edges: cy.edges().map(e => ({
-            src: e.data("source"), dst: e.data("target"),
-            difficulty: e.data("difficulty"), cost: e.data("cost")
-          })),
-          entry: $("entry").value,
-          target: $("target").value
-        };
-      }
-
-      async function getResult() {
-        if (result) return result;
-        msg("");
-        const net = currentNetwork();
-        if (net.nodes.length < 2) { msg("Kam az kam 2 nodes chahiye"); return null; }
-        if (net.entry === net.target) { msg("Entry aur target alag hone chahiye"); return null; }
-        try {
-          const r = await fetch("/api/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" }, body: JSON.stringify(net)
-          });
-          const data = await r.json();
-          if (!r.ok) {
-            msg(typeof data.detail === "string" ? data.detail : "Input galat hai");
-            return null;
-          }
-          result = data;
-          return result;
-        } catch (e) {
-          msg("Server se rabta nahi hua. Kya uvicorn chal raha hai?");
-          return null;
-        }
-      }
-
-      // ---------- Editor buttons ----------
-      $("btnAddNode").onclick = () => {
-        const id = $("nodeName").value.trim();
-        if (!id) return msg("Node ka naam likho");
-        if (cy.getElementById(id).length) return msg("Yeh node pehle se maujood hai");
-        cy.add({ group: "nodes", data: { id }, position: { x: 80 + Math.random() * 400, y: 60 + Math.random() * 300 } });
-        $("nodeName").value = "";
-        afterChange();
-      };
-
-      $("btnSaveEdge").onclick = () => {
-        const s = $("edgeFrom").value, t = $("edgeTo").value;
-        if (!s || !t) return msg("Pehle nodes banao");
-        if (s === t) return msg("Node se khud tak edge allowed nahi");
-        const d = readNum("diff", "Difficulty"); if (d === null) return;
-        const c = readNum("cost", "Cost"); if (c === null) return;
-        addEdge(s, t, d, c);
-        afterChange();
-      };
-
-      $("btnDelete").onclick = () => {
-        const sel = cy.$(":selected");
-        if (!sel.length) return msg("Pehle koi node ya edge select karo");
-        sel.remove();
-        afterChange();
-      };
-
-      cy.on("tap", "edge", evt => {
-        const e = evt.target;
-        $("edgeFrom").value = e.data("source");
-        $("edgeTo").value = e.data("target");
-        $("diff").value = e.data("difficulty");
-        $("cost").value = e.data("cost");
-      });
-
-      $("entry").onchange = $("target").onchange = () => { resetResult(); markEndpoints(); };
-      $("btnSample").onclick = () => loadNetwork(SAMPLE);
-      $("btnClear").onclick = () => { cy.elements().remove(); afterChange(); };
-
-      // ---------- Analysis buttons ----------
-      $("btnPath").onclick = async () => {
-        const r = await getResult(); if (!r) return;
-        cy.elements().removeClass("path cut removed");
-        if (!r.attack_path.length) { out.textContent = "Entry se target tak koi attack path nahi hai."; return; }
-        for (let i = 0; i < r.attack_path.length - 1; i++)
-          cy.getElementById(r.attack_path[i] + "->" + r.attack_path[i + 1]).addClass("path");
-        out.textContent = `Attack path:\n${r.attack_path.join(" → ")}\nTotal difficulty: ${r.attack_difficulty}`;
-      };
-
-      $("btnCut").onclick = async () => {
-        const r = await getResult(); if (!r) return;
-        cy.elements().removeClass("path cut removed");
-        if (!r.cut_edges.length) { out.textContent = "Koi path hi nahi hai, to cut ki zaroorat nahi."; return; }
-        r.cut_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("cut"));
-        out.textContent = "Edges to cut:\n" +
-          r.cut_edges.map(e => `${e.src} → ${e.dst} (cost ${e.cost})`).join("\n") +
-          `\nTotal defense cost: ${r.cut_cost}`;
-      };
-
-      $("btnVerify").onclick = async () => {
-        const r = await getResult(); if (!r) return;
-        cy.elements().removeClass("path cut removed");
-        r.cut_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("removed"));
-        out.textContent = !r.attack_path.length ? "Pehle se koi attack path nahi tha."
-          : r.verified ? "Verified: cut ke baad koi attack path nahi bacha."
-            : "Abhi bhi raasta hai: " + r.path_after_fix.join(" → ");
-      };
-
-      loadNetwork(SAMPLE);
-    </script>
+  <script src="algorithms.js"></script>
+  <script src="app.js"></script>
 </body>
-
 </html>

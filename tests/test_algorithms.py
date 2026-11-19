@@ -1,9 +1,10 @@
 from app.algorithms.dijkstra import dijkstra
-from app.algorithms.edmonds_karp import edmonds_karp
+from app.algorithms.edmonds_karp import edmonds_karp, BIG
+from app.algorithms.budget import greedy_budget_defense
 
 
-def E(src, dst, difficulty, cost):
-    return {"src": src, "dst": dst, "difficulty": difficulty, "cost": cost}
+def E(src, dst, difficulty, cost, blockable=True):
+    return {"src": src, "dst": dst, "difficulty": difficulty, "cost": cost, "blockable": blockable}
 
 
 SAMPLE_NODES = ["Laptop", "Workstation", "Mail", "FileServer", "AppServer", "DB"]
@@ -94,6 +95,31 @@ def test_edmonds_karp_details():
     assert "source_partition" in details
     assert "Laptop" in details["source_partition"]
     assert "DB" in details["target_partition"]
+
+
+# ---------- Budget & Locked Edges ----------
+
+def test_locked_edge_not_cut():
+    # If Laptop -> Mail is locked (blockable=False), Edmonds-Karp must route around it
+    edges = [
+        E("Laptop", "Workstation", 2, 4, blockable=True),
+        E("Laptop", "Mail", 1, 3, blockable=False),
+        E("Workstation", "FileServer", 3, 5, blockable=True),
+        E("Mail", "FileServer", 4, 2, blockable=True),
+        E("Mail", "AppServer", 5, 3, blockable=True),
+        E("FileServer", "DB", 2, 6, blockable=True),
+        E("AppServer", "DB", 1, 2, blockable=True),
+    ]
+    flow, cut = edmonds_karp(SAMPLE_NODES, edges, "Laptop", "DB")
+    cut_pairs = {(e["src"], e["dst"]) for e in cut}
+    assert ("Laptop", "Mail") not in cut_pairs
+
+
+def test_greedy_budget_defense():
+    # Budget of 3 only allows cutting Laptop->Mail (cost 3) or Mail->FileServer (cost 2)
+    removed, spent = greedy_budget_defense(SAMPLE_NODES, SAMPLE_EDGES, "Laptop", "DB", budget=3.0)
+    assert spent <= 3.0
+    assert len(removed) >= 1
 
 
 # ---------- Chain: cut must block every path ----------

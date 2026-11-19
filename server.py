@@ -1,19 +1,20 @@
 """
-NetCut - Standalone Decision-Support Server
-Zero-Dependency Standard Library Fallback + FastAPI/Uvicorn Launcher.
+NetCut - Decision-Support Web Server
+Zero-dependency, high-reliability server supporting both localhost and 127.0.0.1.
 
-Allows NetCut to run out-of-the-box on ANY Python 3.8+ system without needing pip packages.
-
-Usage:
-    python server.py              # Starts on http://127.0.0.1:8000
-    python server.py --port 5000  # Starts on custom port
+Can be run with:
+    python server.py
+    python run.py
+    python app/main.py
 """
 
 import argparse
 import json
 import mimetypes
 import os
+import socket
 import sys
+import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from typing import Any, Dict
 
@@ -26,6 +27,13 @@ from app.algorithms.dijkstra import dijkstra
 from app.algorithms.edmonds_karp import edmonds_karp
 
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# Explicit MIME mappings to avoid Windows registry issues
+mimetypes.init()
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("text/html", ".html")
+mimetypes.add_type("application/json", ".json")
 
 PRESETS = {
     "benchmark": {
@@ -205,18 +213,20 @@ class NetCutHTTPHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=STATIC_DIR, **kwargs)
 
     def do_GET(self):
-        if self.path == "/api/health":
-            self.send_json_response(200, {"status": "operational", "engine": "NetCut DAA Chained v2.0 (Native Server)"})
-        elif self.path == "/api/presets":
+        clean_path = self.path.split("?")[0]
+        if clean_path == "/api/health":
+            self.send_json_response(200, {"status": "operational", "engine": "NetCut DAA Chained v2.0"})
+        elif clean_path == "/api/presets":
             self.send_json_response(200, PRESETS)
+        elif clean_path == "/" or clean_path == "":
+            self.path = "/index.html"
+            super().do_GET()
         else:
-            # Map root to index.html
-            if self.path == "/" or self.path == "":
-                self.path = "/index.html"
             super().do_GET()
 
     def do_POST(self):
-        if self.path == "/api/analyze":
+        clean_path = self.path.split("?")[0]
+        if clean_path == "/api/analyze":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length).decode("utf-8")
             try:
@@ -229,6 +239,14 @@ class NetCutHTTPHandler(SimpleHTTPRequestHandler):
                 self.send_json_response(500, {"detail": f"Internal computation error: {str(ex)}"})
         else:
             self.send_json_response(404, {"detail": "Endpoint not found."})
+
+    def do_OPTIONS(self):
+        # Handle CORS preflight
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
 
     def send_json_response(self, code: int, data: Any):
         content = json.dumps(data).encode("utf-8")
@@ -244,32 +262,63 @@ class NetCutHTTPHandler(SimpleHTTPRequestHandler):
         sys.stderr.write(f"[{self.log_date_time_string()}] {format % args}\n")
 
 
+def is_port_available(port: int, host: str = "0.0.0.0") -> bool:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((host, port))
+            return True
+    except OSError:
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="NetCut Decision-Support Engine")
-    parser.add_argument("--port", type=int, default=8000, help="Server port (default: 8000)")
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Server host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8000, help="Initial server port (default: 8000)")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Server host binding (default: 0.0.0.0 for localhost & 127.0.0.1)")
+    parser.add_argument("--no-browser", action="store_true", help="Do not auto-open browser")
     parser.add_argument("--fastapi", action="store_true", help="Force FastAPI/uvicorn runner if available")
     args = parser.parse_args()
 
-    # Try FastAPI if requested
+    # Try FastAPI if explicitly requested and available
     if args.fastapi:
         try:
             import uvicorn
-            print(f"[NetCut] Starting with Uvicorn/FastAPI on http://{args.host}:{args.port}")
-            uvicorn.run("app.main:app", host=args.host, port=args.port, reload=True)
+            print(f"[NetCut] Starting with Uvicorn/FastAPI on http://localhost:{args.port}")
+            uvicorn.run("app.main:app", host="0.0.0.0", port=args.port, reload=True)
             return
         except ImportError:
-            print("[NetCut] FastAPI/Uvicorn not found. Falling back to native high-performance HTTP server...")
+            print("[NetCut] FastAPI/Uvicorn not installed. Falling back to native server...")
 
-    server_address = (args.host, args.port)
+    port = args.port
+    # Find next available port if port is already in use
+    while not is_port_available(port, args.host) and port < args.port + 20:
+        print(f"[NetCut] Port {port} is occupied, trying port {port + 1}...")
+        port += 1
+
+    server_address = (args.host, port)
     httpd = HTTPServer(server_address, NetCutHTTPHandler)
-    print("=" * 70)
+
+    local_url = f"http://localhost:{port}"
+    ip_url = f"http://127.0.0.1:{port}"
+
+    print("=" * 72)
     print("  NETCUT // Attack-Path Analysis & Minimum-Cut Defense Planner")
-    print("  DAA Complex Project - Muhammad Ibrahim & Muhammad Daniyal Akbar")
-    print(f"  Live Console: http://{args.host}:{args.port}")
-    print("  Endpoints: /api/analyze | /api/presets | /api/health")
-    print("  Press Ctrl+C to terminate.")
-    print("=" * 70)
+    print("  Course: Design and Analysis of Algorithms (DAA)")
+    print("  Team: Muhammad Ibrahim (CT-24144), Muhammad Daniyal Akbar (CT-24145)")
+    print("  Instructor: Ms. Tooba Sheikh")
+    print("-" * 72)
+    print(f"  [+] Localhost Access: {local_url}")
+    print(f"  [+] Direct IP Access: {ip_url}")
+    print("  [+] API Endpoints:   /api/analyze  |  /api/presets  |  /api/health")
+    print("  [+] Press Ctrl+C in this terminal to stop the server.")
+    print("=" * 72)
+
+    if not args.no_browser:
+        try:
+            webbrowser.open(local_url)
+        except Exception:
+            pass
 
     try:
         httpd.serve_forever()
