@@ -49,6 +49,15 @@ def test_dijkstra_sample_network():
     assert path[0] == "Laptop" and path[-1] == "DB"
 
 
+def test_dijkstra_details():
+    dist, path, details = dijkstra(SAMPLE_NODES, SAMPLE_EDGES, "Laptop", "DB", return_details=True)
+    assert dist == 7
+    assert len(path) == 4
+    assert "edge_steps" in details
+    assert len(details["edge_steps"]) == 3
+    assert details["complexity"] == "O((V + E) log V)"
+
+
 # ---------- Edmonds-Karp ----------
 
 def test_maxflow_classic_graph():
@@ -76,6 +85,17 @@ def test_maxflow_no_path():
     assert cut == []
 
 
+def test_edmonds_karp_details():
+    flow, cut, details = edmonds_karp(SAMPLE_NODES, SAMPLE_EDGES, "Laptop", "DB", return_details=True)
+    assert flow == 7
+    assert len(cut) == 2
+    assert "augmenting_paths" in details
+    assert len(details["augmenting_paths"]) >= 1
+    assert "source_partition" in details
+    assert "Laptop" in details["source_partition"]
+    assert "DB" in details["target_partition"]
+
+
 # ---------- Chain: cut must block every path ----------
 
 def test_removing_cut_blocks_all_paths():
@@ -86,3 +106,4 @@ def test_removing_cut_blocks_all_paths():
     remaining = [e for e in SAMPLE_EDGES if (e["src"], e["dst"]) not in cut_pairs]
     dist, path = dijkstra(SAMPLE_NODES, remaining, "Laptop", "DB")
     assert path == []
+    assert dist is None

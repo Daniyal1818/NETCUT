@@ -1,321 +1,386 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
-<meta charset="utf-8">
-<title>NetCut</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
-<style>
-  body{font-family:sans-serif;margin:0;display:flex;height:100vh}
-  #cy{flex:1;background:#fafafa}
-  #panel{width:350px;padding:12px;border-left:1px solid #ccc;overflow:auto;font-size:14px}
-  fieldset{margin:0 0 10px;border:1px solid #ddd;border-radius:6px}
-  legend{font-weight:bold}
-  input,select{width:100%;box-sizing:border-box;margin:3px 0;padding:5px}
-  .row{display:flex;gap:6px}
-  button{width:100%;margin:4px 0;padding:7px;cursor:pointer}
-  #msg{color:#b00;min-height:18px;margin:4px 0}
-  pre{white-space:pre-wrap;background:#f4f4f4;padding:8px;border-radius:6px}
-  small{color:#666}
-</style>
-</head>
-<body>
-<div id="cy"></div>
-
-<div id="panel">
-  <h3 style="margin-top:0">NetCut</h3>
-
-  <fieldset>
-    <legend>1. Node (host) add karo</legend>
-    <input id="nodeName" placeholder="Naam, jaise Router">
-    <button id="btnAddNode">Add node</button>
-  </fieldset>
-
-  <fieldset>
-    <legend>2. Edge (link) add / update</legend>
-    <div class="row">
-      <select id="edgeFrom"></select>
-      <select id="edgeTo"></select>
-    </div>
-    <div class="row">
-      <input id="diff" type="number" min="0" step="any" placeholder="Difficulty" value="1">
-      <input id="cost" type="number" min="0" step="any" placeholder="Cost" value="1">
-    </div>
-    <label><input id="blockable" type="checkbox" checked style="width:auto"> Blockable (cut ho sakta hai)</label>
-    <button id="btnSaveEdge">Add / update edge</button>
-    <small>Edge par click karo to values yahan aa jayengi. Locked edge par 🔒 nazar aayega.</small>
-  </fieldset>
-
-  <fieldset>
-    <legend>3. Delete</legend>
-    <button id="btnDelete">Selected node/edge delete karo</button>
-    <small>Click se select karo (Shift + click se kai).</small>
-  </fieldset>
-
-  <fieldset>
-    <legend>4. Attacker, target aur budget</legend>
-    <label>Entry (attacker yahan se shuru)</label>
-    <select id="entry"></select>
-    <label>Target (crown jewel)</label>
-    <select id="target"></select>
-    <label>Defense budget</label>
-    <input id="budget" type="number" min="0" step="any" placeholder="Khali = unlimited">
-  </fieldset>
-
-  <div id="msg"></div>
-
-  <button id="btnPath">A. Find attack path</button>
-  <button id="btnCut">B. Compute defense plan</button>
-  <button id="btnVerify">C. Apply plan &amp; verify</button>
-  <pre id="out"></pre>
-
-  <div class="row">
-    <button id="btnSample">Sample network</button>
-    <button id="btnClear">Sab saaf</button>
-  </div>
-</div>
-
-<script>
-const SAMPLE = {
-  nodes: ["Laptop","Workstation","Mail","FileServer","AppServer","DB"],
-  edges: [
-    {src:"Laptop",dst:"Workstation",difficulty:2,cost:4,blockable:true},
-    {src:"Laptop",dst:"Mail",difficulty:1,cost:3,blockable:true},
-    {src:"Workstation",dst:"FileServer",difficulty:3,cost:5,blockable:true},
-    {src:"Mail",dst:"FileServer",difficulty:4,cost:2,blockable:true},
-    {src:"Mail",dst:"AppServer",difficulty:5,cost:3,blockable:true},
-    {src:"FileServer",dst:"DB",difficulty:2,cost:6,blockable:true},
-    {src:"AppServer",dst:"DB",difficulty:1,cost:2,blockable:true}
-  ],
-  entry:"Laptop", target:"DB"
-};
-
-const $ = id => document.getElementById(id);
-const out = $("out");
-let result = null;
-const fmt = n => (n === null || n === undefined) ? "-" : (Number.isInteger(n) ? String(n) : n.toFixed(2));
-
-const cy = cytoscape({
-  container: $("cy"),
-  elements: [],
-  style: [
-    {selector:"node", style:{label:"data(id)", "background-color":"#4a90d9", color:"#222",
-                             "text-valign":"bottom", "text-margin-y":4, "font-size":12}},
-    {selector:"node.entry", style:{"background-color":"#2e9e5b", "border-width":3, "border-color":"#14633a"}},
-    {selector:"node.target", style:{"background-color":"#c0392b", "border-width":3, "border-color":"#7b1f15"}},
-    {selector:"edge", style:{label:"data(label)", "font-size":10, width:2, "curve-style":"bezier",
-                             "target-arrow-shape":"triangle", "line-color":"#aaa", "target-arrow-color":"#aaa",
-                             "text-background-color":"#fafafa", "text-background-opacity":1,
-                             "text-background-padding":2}},
-    {selector:":selected", style:{"overlay-color":"#2d6cdf", "overlay-opacity":0.25}},
-    {selector:".path", style:{"line-color":"red","target-arrow-color":"red", width:4}},
-    {selector:".cut", style:{"line-color":"orange","target-arrow-color":"orange", width:4, "line-style":"dashed"}},
-    {selector:".removed", style:{opacity:0.15}}
-  ]
-});
-
-function msg(t){ $("msg").textContent = t || ""; }
-
-function resetResult(){
-  result = null;
-  cy.elements().removeClass("path cut removed");
-  out.textContent = "";
-}
-
-function fill(selId, ids, preferred){
-  const sel = $(selId);
-  const keep = preferred ?? sel.value;
-  sel.innerHTML = "";
-  ids.forEach(i => {
-    const o = document.createElement("option");
-    o.value = o.textContent = i;
-    sel.appendChild(o);
-  });
-  if (ids.includes(keep)) sel.value = keep;
-}
-
-function refreshSelects(entry, target){
-  const ids = cy.nodes().map(n => n.id());
-  fill("edgeFrom", ids);
-  fill("edgeTo", ids);
-  fill("entry", ids, entry);
-  fill("target", ids, target);
-  markEndpoints();
-}
-
-function markEndpoints(){
-  cy.nodes().removeClass("entry target");
-  if ($("entry").value) cy.getElementById($("entry").value).addClass("entry");
-  if ($("target").value) cy.getElementById($("target").value).addClass("target");
-}
-
-function afterChange(){
-  resetResult();
-  refreshSelects();
-  msg("");
-}
-
-function addEdge(src, dst, d, c, blockable){
-  const id = src + "->" + dst;
-  const label = `diff ${d} / cost ${c}` + (blockable ? "" : " 🔒");
-  const ex = cy.getElementById(id);
-  if (ex.length) ex.data({difficulty:d, cost:c, blockable, label});
-  else cy.add({data:{id, source:src, target:dst, difficulty:d, cost:c, blockable, label}});
-}
-
-function loadNetwork(n){
-  cy.elements().remove();
-  n.nodes.forEach(id => cy.add({data:{id}}));
-  n.edges.forEach(e => addEdge(e.src, e.dst, e.difficulty, e.cost, e.blockable !== false));
-  cy.layout({name:"breadthfirst", directed:true, roots:cy.getElementById(n.entry), padding:30}).run();
-  refreshSelects(n.entry, n.target);
-  resetResult();
-  msg("");
-}
-
-function readNum(id, label){
-  const v = parseFloat($(id).value);
-  if (isNaN(v) || v < 0){ msg(label + " 0 ya us se bara number hona chahiye"); return null; }
-  return v;
-}
-
-function readBudget(){
-  const raw = $("budget").value.trim();
-  if (raw === "") return null;
-  const v = parseFloat(raw);
-  if (isNaN(v) || v < 0){ msg("Budget 0 ya us se bara number hona chahiye"); return undefined; }
-  return v;
-}
-
-function currentNetwork(){
-  return {
-    nodes: cy.nodes().map(n => n.id()),
-    edges: cy.edges().map(e => ({src:e.data("source"), dst:e.data("target"),
-                                 difficulty:e.data("difficulty"), cost:e.data("cost"),
-                                 blockable:e.data("blockable")})),
-    entry: $("entry").value,
-    target: $("target").value,
-    budget: null
-  };
-}
-
-async function getResult(){
-  if (result) return result;
-  msg("");
-  const net = currentNetwork();
-  if (net.nodes.length < 2){ msg("Kam az kam 2 nodes chahiye"); return null; }
-  if (net.entry === net.target){ msg("Entry aur target alag hone chahiye"); return null; }
-  const b = readBudget();
-  if (b === undefined) return null;
-  net.budget = b;
-  try{
-    const r = await fetch("/api/analyze", {method:"POST",
-      headers:{"Content-Type":"application/json"}, body:JSON.stringify(net)});
-    const data = await r.json();
-    if (!r.ok){
-      msg(typeof data.detail === "string" ? data.detail : "Input galat hai");
-      return null;
+  <meta charset="utf-8">
+  <title>NetCut</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      display: flex;
+      height: 100vh
     }
-    result = data;
-    return result;
-  }catch(e){
-    msg("Server se rabta nahi hua. Kya uvicorn chal raha hai?");
-    return null;
-  }
-}
 
-// ---------- Editor buttons ----------
-$("btnAddNode").onclick = () => {
-  const id = $("nodeName").value.trim();
-  if (!id) return msg("Node ka naam likho");
-  if (cy.getElementById(id).length) return msg("Yeh node pehle se maujood hai");
-  cy.add({group:"nodes", data:{id}, position:{x:80 + Math.random()*400, y:60 + Math.random()*300}});
-  $("nodeName").value = "";
-  afterChange();
-};
+    #cy {
+      flex: 1;
+      background: #fafafa
+    }
 
-$("btnSaveEdge").onclick = () => {
-  const s = $("edgeFrom").value, t = $("edgeTo").value;
-  if (!s || !t) return msg("Pehle nodes banao");
-  if (s === t) return msg("Node se khud tak edge allowed nahi");
-  const d = readNum("diff", "Difficulty"); if (d === null) return;
-  const c = readNum("cost", "Cost"); if (c === null) return;
-  addEdge(s, t, d, c, $("blockable").checked);
-  afterChange();
-};
+    #panel {
+      width: 340px;
+      padding: 12px;
+      border-left: 1px solid #ccc;
+      overflow: auto;
+      font-size: 14px
+    }
 
-$("btnDelete").onclick = () => {
-  const sel = cy.$(":selected");
-  if (!sel.length) return msg("Pehle koi node ya edge select karo");
-  sel.remove();
-  afterChange();
-};
+    fieldset {
+      margin: 0 0 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px
+    }
 
-cy.on("tap", "edge", evt => {
-  const e = evt.target;
-  $("edgeFrom").value = e.data("source");
-  $("edgeTo").value = e.data("target");
-  $("diff").value = e.data("difficulty");
-  $("cost").value = e.data("cost");
-  $("blockable").checked = e.data("blockable") !== false;
-});
+    legend {
+      font-weight: bold
+    }
 
-$("entry").onchange = $("target").onchange = () => { resetResult(); markEndpoints(); };
-$("budget").oninput = () => { resetResult(); msg(""); };
-$("btnSample").onclick = () => loadNetwork(SAMPLE);
-$("btnClear").onclick = () => { cy.elements().remove(); afterChange(); };
+    input,
+    select {
+      width: 100%;
+      box-sizing: border-box;
+      margin: 3px 0;
+      padding: 5px
+    }
 
-// ---------- Analysis buttons ----------
-$("btnPath").onclick = async () => {
-  const r = await getResult(); if (!r) return;
-  cy.elements().removeClass("path cut removed");
-  if (!r.attack_path.length){ out.textContent = "Entry se target tak koi attack path nahi hai."; return; }
-  for (let i = 0; i < r.attack_path.length - 1; i++)
-    cy.getElementById(r.attack_path[i] + "->" + r.attack_path[i+1]).addClass("path");
-  out.textContent = `Attack path:\n${r.attack_path.join(" → ")}\nTotal difficulty: ${fmt(r.attack_difficulty)}`;
-};
+    .row {
+      display: flex;
+      gap: 6px
+    }
 
-$("btnCut").onclick = async () => {
-  const r = await getResult(); if (!r) return;
-  cy.elements().removeClass("path cut removed");
-  if (!r.attack_path.length){ out.textContent = "Koi attack path hi nahi hai, defense ki zaroorat nahi."; return; }
-  r.defense_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("cut"));
+    button {
+      width: 100%;
+      margin: 4px 0;
+      padding: 7px;
+      cursor: pointer
+    }
 
-  const list = r.defense_edges.length
-    ? r.defense_edges.map(e => `${e.src} → ${e.dst} (cost ${fmt(e.cost)})`).join("\n")
-    : "(koi edge budget mein afford nahi ho saka)";
+    #msg {
+      color: #b00;
+      min-height: 18px;
+      margin: 4px 0
+    }
 
-  let head;
-  if (r.strategy === "min_cut"){
-    head = "OPTIMAL min-cut plan: attacker ke saare raaste band.";
-  } else if (r.min_cut_cost === null){
-    head = "Kuch links locked hain, is liye poora block mumkin nahi.\nBest-effort greedy plan:";
-  } else {
-    head = `Budget (${fmt(r.budget)}) min-cut cost (${fmt(r.min_cut_cost)}) se kam hai, poora block mumkin nahi.\n` +
-           `Kami: ${fmt(r.shortfall)}\nBudget ke andar greedy plan:`;
-  }
-  let text = `${head}\n${list}\nTotal defense cost: ${fmt(r.defense_cost)}`;
-  if (r.strategy === "greedy"){
-    text += `\nAttacker difficulty: ${fmt(r.attack_difficulty)} → ` +
-            (r.verified ? "koi raasta nahi" : fmt(r.difficulty_after_fix));
-  }
-  out.textContent = text;
-};
+    pre {
+      white-space: pre-wrap;
+      background: #f4f4f4;
+      padding: 8px;
+      border-radius: 6px
+    }
 
-$("btnVerify").onclick = async () => {
-  const r = await getResult(); if (!r) return;
-  cy.elements().removeClass("path cut removed");
-  r.defense_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("removed"));
-  if (!r.attack_path.length){
-    out.textContent = "Pehle se koi attack path nahi tha.";
-  } else if (r.verified){
-    out.textContent = "Verified: plan ke baad koi attack path nahi bacha.";
-  } else {
-    out.textContent = `Attacker abhi bhi pohanch sakta hai:\n${r.path_after_fix.join(" → ")}\n` +
-                      `Difficulty: ${fmt(r.attack_difficulty)} → ${fmt(r.difficulty_after_fix)}`;
-  }
-};
+    small {
+      color: #666
+    }
+  </style>
+</head>
 
-loadNetwork(SAMPLE);
-</script>
+<body>
+
+  <!-- ================= Header ================= -->
+  <header id="header">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          <path d="M9 12l2 2 4-4" />
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">
+          NETCUT <span style="font-size:12px; color:var(--text-sub); font-weight:400;">// DEFENSE PLANNER</span>
+        </div>
+        <div class="brand-tag">Attack-Path Analysis &amp; Minimum-Cut Optimization Engine</div>
+      </div>
+      <div class="team-pill">
+        DAA Project &bull; CT-24144 &amp; CT-24145 &bull; Ms. Tooba Sheikh
+      </div>
+    </div>
+
+    <div class="header-center">
+      <div class="hud-pill">
+        <span class="dot"></span>
+        <span class="hud-stat">Topology: <strong id="statNodes">0</strong> Hosts / <strong id="statEdges">0</strong>
+          Links</span>
+      </div>
+      <div class="hud-pill">
+        <span class="hud-stat">Engine: <strong id="statEngine">Initializing...</strong></span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <select id="presetSelect" class="hud-select" style="padding:6px 10px; font-weight:600;">
+        <option value="benchmark">Preset: Academic Benchmark</option>
+        <option value="enterprise">Preset: Corporate Enterprise DMZ</option>
+        <option value="cloud">Preset: Cloud VPC Microservices</option>
+        <option value="scada">Preset: Critical Infrastructure SCADA</option>
+      </select>
+
+      <button id="btnRunAll" class="btn btn-primary" style="width:auto; padding:6px 14px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="5 3 19 12 5 21 5 3" />
+        </svg>
+        Execute Chained Pipeline
+      </button>
+
+      <button id="btnExportReport" class="btn btn-sm" style="width:auto;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+        </svg>
+        Audit Report
+      </button>
+    </div>
+    <button id="btnSaveEdge">Add / update edge</button>
+    <small>Edge par click karo to uski values yahan aa jayengi, badal ke dobara dabao.</small>
+    </fieldset>
+
+    <fieldset>
+      <legend>3. Delete</legend>
+      <button id="btnDelete">Selected node/edge delete karo</button>
+      <small>Node ya edge par click karke select karo (Shift + click se kai).</small>
+    </fieldset>
+
+    <fieldset>
+      <legend>4. Attacker aur target</legend>
+      <label>Entry (attacker yahan se shuru)</label>
+      <select id="entry"></select>
+      <label>Target (crown jewel)</label>
+      <select id="target"></select>
+    </fieldset>
+
+    <div id="msg"></div>
+
+    <button id="btnPath">A. Find attack path</button>
+    <button id="btnCut">B. Compute min-cut</button>
+    <button id="btnVerify">C. Apply fix &amp; verify</button>
+    <pre id="out"></pre>
+
+    <div class="row">
+      <button id="btnSample">Sample network</button>
+      <button id="btnClear">Sab saaf</button>
+    </div>
+    </div>
+
+    <script>
+      const SAMPLE = {
+        nodes: ["Laptop", "Workstation", "Mail", "FileServer", "AppServer", "DB"],
+        edges: [
+          { src: "Laptop", dst: "Workstation", difficulty: 2, cost: 4 },
+          { src: "Laptop", dst: "Mail", difficulty: 1, cost: 3 },
+          { src: "Workstation", dst: "FileServer", difficulty: 3, cost: 5 },
+          { src: "Mail", dst: "FileServer", difficulty: 4, cost: 2 },
+          { src: "Mail", dst: "AppServer", difficulty: 5, cost: 3 },
+          { src: "FileServer", dst: "DB", difficulty: 2, cost: 6 },
+          { src: "AppServer", dst: "DB", difficulty: 1, cost: 2 }
+        ],
+        entry: "Laptop", target: "DB"
+      };
+
+      const $ = id => document.getElementById(id);
+      const out = $("out");
+      let result = null;
+
+      const cy = cytoscape({
+        container: $("cy"),
+        elements: [],
+        style: [
+          {
+            selector: "node", style: {
+              label: "data(id)", "background-color": "#4a90d9", color: "#222",
+              "text-valign": "bottom", "text-margin-y": 4, "font-size": 12
+            }
+          },
+          { selector: "node.entry", style: { "background-color": "#2e9e5b", "border-width": 3, "border-color": "#14633a" } },
+          { selector: "node.target", style: { "background-color": "#c0392b", "border-width": 3, "border-color": "#7b1f15" } },
+          {
+            selector: "edge", style: {
+              label: "data(label)", "font-size": 10, width: 2, "curve-style": "bezier",
+              "target-arrow-shape": "triangle", "line-color": "#aaa", "target-arrow-color": "#aaa",
+              "text-background-color": "#fafafa", "text-background-opacity": 1,
+              "text-background-padding": 2
+            }
+          },
+          { selector: ":selected", style: { "overlay-color": "#2d6cdf", "overlay-opacity": 0.25 } },
+          { selector: ".path", style: { "line-color": "red", "target-arrow-color": "red", width: 4 } },
+          { selector: ".cut", style: { "line-color": "orange", "target-arrow-color": "orange", width: 4, "line-style": "dashed" } },
+          { selector: ".removed", style: { opacity: 0.15 } }
+        ]
+      });
+
+      function msg(t) { $("msg").textContent = t || ""; }
+
+      function resetResult() {
+        result = null;
+        cy.elements().removeClass("path cut removed");
+        out.textContent = "";
+      }
+
+      function fill(selId, ids, preferred) {
+        const sel = $(selId);
+        const keep = preferred ?? sel.value;
+        sel.innerHTML = "";
+        ids.forEach(i => {
+          const o = document.createElement("option");
+          o.value = o.textContent = i;
+          sel.appendChild(o);
+        });
+        if (ids.includes(keep)) sel.value = keep;
+      }
+
+      function refreshSelects(entry, target) {
+        const ids = cy.nodes().map(n => n.id());
+        fill("edgeFrom", ids);
+        fill("edgeTo", ids);
+        fill("entry", ids, entry);
+        fill("target", ids, target);
+        markEndpoints();
+      }
+
+      function markEndpoints() {
+        cy.nodes().removeClass("entry target");
+        if ($("entry").value) cy.getElementById($("entry").value).addClass("entry");
+        if ($("target").value) cy.getElementById($("target").value).addClass("target");
+      }
+
+      function afterChange() {
+        resetResult();
+        refreshSelects();
+        msg("");
+      }
+
+      function addEdge(src, dst, d, c) {
+        const id = src + "->" + dst;
+        const label = `diff ${d} / cost ${c}`;
+        const ex = cy.getElementById(id);
+        if (ex.length) ex.data({ difficulty: d, cost: c, label });
+        else cy.add({ data: { id, source: src, target: dst, difficulty: d, cost: c, label } });
+      }
+
+      function loadNetwork(n) {
+        cy.elements().remove();
+        n.nodes.forEach(id => cy.add({ data: { id } }));
+        n.edges.forEach(e => addEdge(e.src, e.dst, e.difficulty, e.cost));
+        cy.layout({ name: "breadthfirst", directed: true, roots: cy.getElementById(n.entry), padding: 30 }).run();
+        refreshSelects(n.entry, n.target);
+        resetResult();
+        msg("");
+      }
+
+      function readNum(id, label) {
+        const v = parseFloat($(id).value);
+        if (isNaN(v) || v < 0) { msg(label + " 0 ya us se bara number hona chahiye"); return null; }
+        return v;
+      }
+
+      function currentNetwork() {
+        return {
+          nodes: cy.nodes().map(n => n.id()),
+          edges: cy.edges().map(e => ({
+            src: e.data("source"), dst: e.data("target"),
+            difficulty: e.data("difficulty"), cost: e.data("cost")
+          })),
+          entry: $("entry").value,
+          target: $("target").value
+        };
+      }
+
+      async function getResult() {
+        if (result) return result;
+        msg("");
+        const net = currentNetwork();
+        if (net.nodes.length < 2) { msg("Kam az kam 2 nodes chahiye"); return null; }
+        if (net.entry === net.target) { msg("Entry aur target alag hone chahiye"); return null; }
+        try {
+          const r = await fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }, body: JSON.stringify(net)
+          });
+          const data = await r.json();
+          if (!r.ok) {
+            msg(typeof data.detail === "string" ? data.detail : "Input galat hai");
+            return null;
+          }
+          result = data;
+          return result;
+        } catch (e) {
+          msg("Server se rabta nahi hua. Kya uvicorn chal raha hai?");
+          return null;
+        }
+      }
+
+      // ---------- Editor buttons ----------
+      $("btnAddNode").onclick = () => {
+        const id = $("nodeName").value.trim();
+        if (!id) return msg("Node ka naam likho");
+        if (cy.getElementById(id).length) return msg("Yeh node pehle se maujood hai");
+        cy.add({ group: "nodes", data: { id }, position: { x: 80 + Math.random() * 400, y: 60 + Math.random() * 300 } });
+        $("nodeName").value = "";
+        afterChange();
+      };
+
+      $("btnSaveEdge").onclick = () => {
+        const s = $("edgeFrom").value, t = $("edgeTo").value;
+        if (!s || !t) return msg("Pehle nodes banao");
+        if (s === t) return msg("Node se khud tak edge allowed nahi");
+        const d = readNum("diff", "Difficulty"); if (d === null) return;
+        const c = readNum("cost", "Cost"); if (c === null) return;
+        addEdge(s, t, d, c);
+        afterChange();
+      };
+
+      $("btnDelete").onclick = () => {
+        const sel = cy.$(":selected");
+        if (!sel.length) return msg("Pehle koi node ya edge select karo");
+        sel.remove();
+        afterChange();
+      };
+
+      cy.on("tap", "edge", evt => {
+        const e = evt.target;
+        $("edgeFrom").value = e.data("source");
+        $("edgeTo").value = e.data("target");
+        $("diff").value = e.data("difficulty");
+        $("cost").value = e.data("cost");
+      });
+
+      $("entry").onchange = $("target").onchange = () => { resetResult(); markEndpoints(); };
+      $("btnSample").onclick = () => loadNetwork(SAMPLE);
+      $("btnClear").onclick = () => { cy.elements().remove(); afterChange(); };
+
+      // ---------- Analysis buttons ----------
+      $("btnPath").onclick = async () => {
+        const r = await getResult(); if (!r) return;
+        cy.elements().removeClass("path cut removed");
+        if (!r.attack_path.length) { out.textContent = "Entry se target tak koi attack path nahi hai."; return; }
+        for (let i = 0; i < r.attack_path.length - 1; i++)
+          cy.getElementById(r.attack_path[i] + "->" + r.attack_path[i + 1]).addClass("path");
+        out.textContent = `Attack path:\n${r.attack_path.join(" → ")}\nTotal difficulty: ${r.attack_difficulty}`;
+      };
+
+      $("btnCut").onclick = async () => {
+        const r = await getResult(); if (!r) return;
+        cy.elements().removeClass("path cut removed");
+        if (!r.cut_edges.length) { out.textContent = "Koi path hi nahi hai, to cut ki zaroorat nahi."; return; }
+        r.cut_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("cut"));
+        out.textContent = "Edges to cut:\n" +
+          r.cut_edges.map(e => `${e.src} → ${e.dst} (cost ${e.cost})`).join("\n") +
+          `\nTotal defense cost: ${r.cut_cost}`;
+      };
+
+      $("btnVerify").onclick = async () => {
+        const r = await getResult(); if (!r) return;
+        cy.elements().removeClass("path cut removed");
+        r.cut_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("removed"));
+        out.textContent = !r.attack_path.length ? "Pehle se koi attack path nahi tha."
+          : r.verified ? "Verified: cut ke baad koi attack path nahi bacha."
+            : "Abhi bhi raasta hai: " + r.path_after_fix.join(" → ");
+      };
+
+      loadNetwork(SAMPLE);
+    </script>
 </body>
+
 </html>
