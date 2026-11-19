@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="cyan">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NetCut // Attack-Path Analysis & Min-Cut Defense Planner</title>
+  <title>NetCut // Cyber Operations &amp; Attack-Path Defense Planner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -23,9 +23,9 @@
       </div>
       <div>
         <div class="brand-title">
-          NETCUT <span style="font-size:12px; color:var(--text-sub); font-weight:400;">// DEFENSE PLANNER</span>
+          NETCUT <span style="font-size:11px; color:var(--text-sub); font-weight:400;">// HYBRID DEFENSE SUITE</span>
         </div>
-        <div class="brand-tag">Attack-Path Analysis &amp; Minimum-Cut Optimization Engine</div>
+        <div class="brand-tag">Network Discovery &bull; CVE Assessment &bull; DAA Min-Cut Planner</div>
       </div>
       <div class="team-pill">
         DAA Project &bull; CT-24144 &amp; CT-24145 &bull; Ms. Tooba Sheikh
@@ -38,11 +38,20 @@
         <span class="hud-stat">Topology: <strong id="statNodes">0</strong> Hosts / <strong id="statEdges">0</strong> Links</span>
       </div>
       <div class="hud-pill">
-        <span class="hud-stat">Engine: <strong id="statEngine">Initializing...</strong></span>
+        <span class="hud-stat">Scanner: <strong id="statScannerEngine">Checking...</strong></span>
       </div>
     </div>
 
     <div class="header-actions">
+      <!-- Theme Switcher -->
+      <select id="themeSelect" class="hud-select" title="Theme Selector" style="border-color:var(--accent-primary);">
+        <option value="cyan">Theme: Cyber Cyan</option>
+        <option value="violet">Theme: Neon Violet</option>
+        <option value="emerald">Theme: Emerald Ops</option>
+        <option value="crimson">Theme: Crimson Alert</option>
+      </select>
+
+      <!-- Presets -->
       <select id="presetSelect" class="hud-select" style="padding:6px 10px; font-weight:600;">
         <option value="benchmark">Preset: Academic Benchmark</option>
         <option value="enterprise">Preset: Corporate Enterprise DMZ</option>
@@ -67,7 +76,11 @@
     <!-- Left Control Console -->
     <aside id="console">
       <nav class="tabs-nav">
-        <button class="tab-btn active" data-tab="topology">
+        <button class="tab-btn active" data-tab="discovery">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></svg>
+          Discovery &amp; CVE
+        </button>
+        <button class="tab-btn" data-tab="topology">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><line x1="12" y1="9" x2="12" y2="15"/></svg>
           Topology Studio
         </button>
@@ -93,8 +106,158 @@
         <!-- Alert Banner -->
         <div id="msgAlert" class="alert" style="display:none;"></div>
 
+        <!-- ================= Tab 0: Network Discovery & CVE Assessment ================= -->
+        <div id="pane-discovery" class="tab-pane active">
+          <!-- Scanner Controls -->
+          <div class="scanner-hero">
+            <div class="auth-warning">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span><strong>Authorized Use Only:</strong> Scan networks you own or have explicit written authorization to assess. Rate-limited to max /24 (256 hosts).</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Scan Target (IP or CIDR Subnet)</label>
+              <div style="display:flex; gap:8px;">
+                <input id="scanTargetInput" type="text" placeholder="e.g. 192.168.1.0/24 or 127.0.0.1" value="192.168.1.0/24" autocomplete="off">
+                <button id="btnStartScan" class="btn btn-primary" style="width:auto; min-width:130px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  Scan Target
+                </button>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Scan Profile</label>
+                <select id="scanProfileSelect">
+                  <option value="fast">Fast Port Scan (-F + Services)</option>
+                  <option value="services">Full Service &amp; Version Probe (-sV)</option>
+                  <option value="ping_only">Host Ping Sweep (-sn)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Discovery Engine</label>
+                <select id="scanEngineSelect">
+                  <option value="auto">Auto (Nmap with Socket Fallback)</option>
+                  <option value="nmap">Force Nmap Engine</option>
+                  <option value="socket">Fast Socket Scanner (Zero Deps)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row" style="margin-top:6px; align-items:center;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Or Load Sample Authorized Scan</label>
+                <select id="sampleScanSelect">
+                  <option value="corporate_subnet">Sample: Corporate Subnet (3 Hosts, Apache/SSH/DB)</option>
+                  <option value="cloud_vpc">Sample: Cloud VPC (K8s Ingress, Express API, Postgres)</option>
+                  <option value="hardened_network">Sample: Hardened Enclave (Patched OpenSSH, TLS 1.3)</option>
+                </select>
+              </div>
+              <div style="padding-top:16px;">
+                <button id="btnLoadSampleScan" class="btn btn-sm">Load Dataset</button>
+              </div>
+            </div>
+
+            <!-- Scanning Progress Indicator -->
+            <div id="scanProgressBar" class="scan-progress-container">
+              <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-sub);">
+                <span id="scanStatusText">Scanning network target...</span>
+                <span id="scanTimeElapsed">0.0s</span>
+              </div>
+              <div class="scan-progress-bar">
+                <div class="scan-progress-fill"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assessment Summary KPI Grid -->
+          <div class="metric-grid-4">
+            <div class="metric-card">
+              <span class="metric-label">Discovered</span>
+              <span id="kpiDiscoveredCount" class="metric-value accent">0</span>
+              <span class="metric-sub">Active Hosts</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Open Ports</span>
+              <span id="kpiOpenPortsCount" class="metric-value">0</span>
+              <span class="metric-sub">Services Active</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Total CVEs</span>
+              <span id="kpiTotalFindings" class="metric-value critical">0</span>
+              <span class="metric-sub">Vulnerabilities</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Critical</span>
+              <span id="kpiCritCount" class="metric-value critical">0</span>
+              <span class="metric-sub">CVSS 9.0 - 10.0</span>
+            </div>
+          </div>
+
+          <!-- 1-Click Graph Import Action -->
+          <div class="card" style="border-color:var(--accent-primary); background:rgba(0, 212, 255, 0.05);">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div>
+                <strong style="font-size:12px; color:var(--text-main);">Integrate Scan into Graph Analysis</strong>
+                <div style="font-size:11px; color:var(--text-sub);">Convert discovered hosts and CVE weights into NETCUT's interactive graph topology for Dijkstra &amp; Min-Cut defense.</div>
+              </div>
+              <button id="btnImportScanToGraph" class="btn btn-primary btn-sm" style="width:auto; min-width:140px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                Import to Graph
+              </button>
+            </div>
+          </div>
+
+          <!-- Discovered Hosts Table -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Discovered Network Hosts</span>
+              <span id="scanEngineBadge" class="badge badge-accent">Engine: Idle</span>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Host IP</th>
+                  <th>Hostname</th>
+                  <th>Ports</th>
+                  <th>Max Severity</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="hostsTableBody">
+                <tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No scan executed yet. Enter an IP or load a sample dataset above.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Vulnerability Findings Table -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Vulnerability Assessment Findings</span>
+              <span id="findingStatsBadge" class="badge">0 Findings</span>
+            </div>
+
+            <!-- Severity Filter Pills -->
+            <div class="filter-pills">
+              <button class="filter-pill active" data-filter="all">All</button>
+              <button class="filter-pill" data-filter="Critical">Critical</button>
+              <button class="filter-pill" data-filter="High">High</button>
+              <button class="filter-pill" data-filter="Medium">Medium</button>
+              <button class="filter-pill" data-filter="Low">Low</button>
+              <button class="filter-pill" data-filter="Informational">Info</button>
+            </div>
+
+            <div id="findingsContainer" class="findings-list">
+              <div style="text-align:center; color:var(--text-muted); font-size:12px; padding:20px 0;">
+                Run discovery scan to populate vulnerability findings.
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- ================= Tab 1: Topology Studio ================= -->
-        <div id="pane-topology" class="tab-pane active">
+        <div id="pane-topology" class="tab-pane">
           <!-- Add Host -->
           <div class="card">
             <div class="card-header">
@@ -196,7 +359,7 @@
           <div class="metric-grid">
             <div class="metric-card">
               <span class="metric-label">Cumulative Exploit Difficulty</span>
-              <span id="kpiDiff" class="metric-value crimson">--</span>
+              <span id="kpiDiff" class="metric-value critical">--</span>
               <span class="metric-sub">Sum of edge resistance weights</span>
             </div>
             <div class="metric-card">
@@ -236,7 +399,7 @@
           <div class="metric-grid">
             <div class="metric-card">
               <span class="metric-label">Minimum Defense Cost</span>
-              <span id="kpiCutCost" class="metric-value orange">--</span>
+              <span id="kpiCutCost" class="metric-value high">--</span>
               <span class="metric-sub">Max-Flow value / Cut Capacity</span>
             </div>
             <div class="metric-card">
@@ -280,8 +443,8 @@
               <span class="card-title">Network Partitions (S-T Cut)</span>
             </div>
             <div style="font-size:12px; line-height:1.6;">
-              <div><strong style="color:var(--crimson);">Compromised Zone (S):</strong> <span id="partitionS">--</span></div>
-              <div style="margin-top:4px;"><strong style="color:var(--emerald);">Protected Enclave (T):</strong> <span id="partitionT">--</span></div>
+              <div><strong style="color:var(--sev-critical);">Compromised Zone (S):</strong> <span id="partitionS">--</span></div>
+              <div style="margin-top:4px;"><strong style="color:var(--sev-info);">Protected Enclave (T):</strong> <span id="partitionT">--</span></div>
             </div>
           </div>
 
@@ -313,11 +476,11 @@
             <div class="metric-grid">
               <div class="metric-card">
                 <span class="metric-label">Pre-Defense Resistance</span>
-                <span id="preDiff" class="metric-value crimson">--</span>
+                <span id="preDiff" class="metric-value critical">--</span>
               </div>
               <div class="metric-card">
                 <span class="metric-label">Post-Defense Resistance</span>
-                <span id="postDiff" class="metric-value emerald">--</span>
+                <span id="postDiff" class="metric-value info">--</span>
               </div>
               <div class="metric-card">
                 <span class="metric-label">Pre-Defense Active Routes</span>
@@ -325,7 +488,7 @@
               </div>
               <div class="metric-card">
                 <span class="metric-label">Post-Defense Active Routes</span>
-                <span id="postPathCount" class="metric-value emerald">--</span>
+                <span id="postPathCount" class="metric-value info">--</span>
               </div>
             </div>
             <div id="verifyDetails" class="card-desc" style="margin-top:8px;"></div>
@@ -336,7 +499,8 @@
               <span class="card-title">Decision-Support Workflow</span>
             </div>
             <ol style="font-size:12px; color:var(--text-sub); padding-left:18px; line-height:1.7;">
-              <li><strong>Dijkstra (Initial):</strong> Exposes the attacker's path of least resistance.</li>
+              <li><strong>Discovery &amp; CVE:</strong> Maps live network surface, exposed ports, and vulnerable software versions.</li>
+              <li><strong>Dijkstra (Initial):</strong> Exposes the attacker's path of least resistance through vulnerable hosts.</li>
               <li><strong>Edmonds-Karp:</strong> Solves max-flow to extract the cheapest bottleneck cut (S-T partition).</li>
               <li><strong>Severance:</strong> Simulates removing all min-cut links from the active network.</li>
               <li><strong>Dijkstra (Verification):</strong> Proves target asset distance is now <em>infinity</em>.</li>
@@ -369,17 +533,17 @@
                 <tr>
                   <td>Dijkstra Shortest Path</td>
                   <td>O((V + E) log V)</td>
-                  <td><strong id="runtimeDijkstra" style="color:var(--cyan);">--</strong></td>
+                  <td><strong id="runtimeDijkstra" style="color:var(--accent-primary);">--</strong></td>
                 </tr>
                 <tr>
                   <td>Edmonds-Karp Max-Flow</td>
-                  <td>O(V · E²)</td>
-                  <td><strong id="runtimeEK" style="color:var(--orange);">--</strong></td>
+                  <td>O(V &bull; E&sup2;)</td>
+                  <td><strong id="runtimeEK" style="color:var(--sev-high);">--</strong></td>
                 </tr>
                 <tr>
                   <td>Post-Defense Verification</td>
                   <td>O((V + E) log V)</td>
-                  <td><strong id="runtimeVerify" style="color:var(--emerald);">--</strong></td>
+                  <td><strong id="runtimeVerify" style="color:var(--sev-info);">--</strong></td>
                 </tr>
               </tbody>
             </table>
@@ -444,11 +608,19 @@
       <div class="canvas-legend">
         <div class="legend-item">
           <div class="legend-badge entry"></div>
-          <span>Threat Entry Point (s)</span>
+          <span>Threat Entry (s)</span>
         </div>
         <div class="legend-item">
           <div class="legend-badge target"></div>
           <span>Crown Jewel (t)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-badge vuln-crit"></div>
+          <span>Critical CVE Host</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-badge vuln-high"></div>
+          <span>High CVE Host</span>
         </div>
         <div class="legend-item">
           <div class="legend-badge path"></div>
@@ -456,11 +628,21 @@
         </div>
         <div class="legend-item">
           <div class="legend-badge cut"></div>
-          <span>Min-Cut Edge (Edmonds-Karp)</span>
+          <span>Min-Cut (Edmonds-Karp)</span>
         </div>
-        <div class="legend-item">
-          <div class="legend-badge safe"></div>
-          <span>Enclave Node</span>
+      </div>
+
+      <!-- Host Details Inspector Drawer -->
+      <div id="hostDrawer">
+        <div class="drawer-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+            <strong id="drawerHostTitle" style="color:var(--text-main); font-size:13px;">Host Inspection</strong>
+          </div>
+          <button id="btnCloseDrawer" class="hud-btn" style="width:24px; height:24px;">&times;</button>
+        </div>
+        <div id="drawerBody" class="drawer-body">
+          <!-- Populated dynamically upon clicking node -->
         </div>
       </div>
     </section>

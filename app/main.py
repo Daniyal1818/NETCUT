@@ -1,6 +1,7 @@
 """
 NetCut - Backend Application Entry Point
-FastAPI Application serving DAA Attack-Path Analysis & Minimum-Cut Defense Planner.
+FastAPI Application serving DAA Attack-Path Analysis, Minimum-Cut Defense Planner,
+and Network Discovery & Vulnerability Assessment Engine.
 
 Authors: Muhammad Ibrahim (CT-24144), Muhammad Daniyal Akbar (CT-24145)
 Course: Design and Analysis of Algorithms (DAA)
@@ -19,6 +20,18 @@ if BASE_DIR not in sys.path:
 from app.algorithms.dijkstra import dijkstra
 from app.algorithms.edmonds_karp import edmonds_karp, BIG
 from app.algorithms.budget import greedy_budget_defense
+from app.scanner import (
+    get_nmap_info,
+    validate_scan_target,
+    ScanTargetError,
+    NmapScanner,
+    SocketScanner,
+)
+from app.scanner.sample_scans import SAMPLE_SCANS
+from app.vulnerability import (
+    assess_network_hosts,
+    convert_assessment_to_network,
+)
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -59,6 +72,13 @@ class Network(BaseModel if FASTAPI_AVAILABLE else object):
     entry: str
     target: str
     budget: Optional[float] = None
+
+
+class ScanRequest(BaseModel if FASTAPI_AVAILABLE else object):
+    target: str
+    profile: Optional[str] = "fast"
+    engine: Optional[str] = "auto"
+    timeout: Optional[int] = 45
 
 
 PRESETS = {
@@ -274,11 +294,55 @@ def compute_pipeline(net_dict: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def execute_network_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
+    target = payload.get("target", "").strip()
+    profile = payload.get("profile", "fast")
+    engine_pref = payload.get("engine", "auto")
+    timeout = int(payload.get("timeout", 45))
+
+    # Validate target
+    try:
+        val_result = validate_scan_target(target)
+    except ScanTargetError as ex:
+        raise ValueError(str(ex))
+
+    nmap_scanner = NmapScanner()
+    use_nmap = False
+
+    if engine_pref == "nmap":
+        if not nmap_scanner.is_available():
+            raise ValueError("Nmap is not installed on this system. Please install Nmap or select 'auto' to use socket fallback.")
+        use_nmap = True
+    elif engine_pref == "socket":
+        use_nmap = False
+    else:  # auto
+        use_nmap = nmap_scanner.is_available()
+
+    if use_nmap:
+        scan_res = nmap_scanner.scan(target, profile=profile, timeout_seconds=timeout)
+    else:
+        socket_scanner = SocketScanner()
+        scan_res = socket_scanner.scan(target, timeout_seconds=timeout)
+
+    # Perform vulnerability assessment on discovered hosts
+    assessment = assess_network_hosts(scan_res.hosts)
+
+    # Convert to NETCUT topology for graph visualization
+    generated_network = convert_assessment_to_network(assessment)
+
+    return {
+        "scan": scan_res.to_dict(),
+        "assessment": assessment,
+        "generated_network": generated_network,
+        "engine_used": "nmap" if use_nmap else "socket_fallback",
+    }
+
+
 if FASTAPI_AVAILABLE:
     app = FastAPI(
         title="NetCut - Attack-Path Analysis & Min-Cut Defense Planner",
-        description="DAA Decision-Support Engine using Dijkstra and Edmonds-Karp algorithms.",
-        version="2.0.0",
+        description="DAA Decision-Support Engine using Dijkstra and Edmonds-Karp with Nmap Discovery and CVE Assessment.",
+        version="2.1.0",
     )
 
     @app.post("/api/analyze")
@@ -298,7 +362,47 @@ if FASTAPI_AVAILABLE:
 
     @app.get("/api/health")
     def health() -> Dict[str, Any]:
-        return {"status": "operational", "engine": "NetCut DAA Chained v2.0 (FastAPI)"}
+        return {"status": "operational", "engine": "NetCut DAA Chained v2.1 (FastAPI)"}
+
+    @app.get("/api/scanner/status")
+    def scanner_status() -> Dict[str, Any]:
+        return get_nmap_info()
+
+    @app.post("/api/scanner/scan")
+    def run_scan(req: ScanRequest) -> Dict[str, Any]:
+        try:
+            return execute_network_scan(req.model_dump())
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        except Exception as ex:
+            raise HTTPException(status_code=500, detail=f"Scan execution error: {ex}")
+
+    @app.get("/api/scanner/samples")
+    def get_scan_samples() -> Dict[str, Any]:
+        return SAMPLE_SCANS
+
+    @app.post("/api/scanner/load-sample")
+    def load_scan_sample(payload: Dict[str, str]) -> Dict[str, Any]:
+        sample_key = payload.get("sample_key", "corporate_subnet")
+        sample = SAMPLE_SCANS.get(sample_key)
+        if not sample:
+            raise HTTPException(status_code=404, detail=f"Sample '{sample_key}' not found.")
+        assessment = assess_network_hosts(sample["hosts"])
+        generated_network = convert_assessment_to_network(assessment)
+        return {
+            "sample_key": sample_key,
+            "title": sample["title"],
+            "description": sample["description"],
+            "scan": {
+                "target": sample["target"],
+                "engine": "sample_benchmark",
+                "success": True,
+                "hosts": sample["hosts"],
+                "hosts_count": len(sample["hosts"]),
+            },
+            "assessment": assessment,
+            "generated_network": generated_network,
+        }
 
     static_path = os.path.join(BASE_DIR, "static")
     if os.path.exists(static_path):

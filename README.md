@@ -1,150 +1,325 @@
-# NetCut: Attack-Path Analysis and Minimum-Cut Defense Planner
+# NETCUT — Attack-Path Analysis & Minimum-Cut Defense Planner
 
-**Course:** Design and Analysis of Algorithms (DAA)  
-**Team Members:** Muhammad Ibrahim (CT-24144), Muhammad Daniyal Akbar (CT-24145)  
-**Instructor:** Ms. Tooba Sheikh  
-**Submission Date:** 25 October 2026  
-
----
-
-## 1. Abstract
-**NetCut** is a cyber decision-support tool that models a computer network as a weighted directed graph and answers two fundamental security questions:
-1. **What is the easiest route an attacker could take to reach a critical crown jewel asset?**
-   - Solved with **Dijkstra's shortest path algorithm** using a min-heap priority queue ($O((V + E) \log V)$).
-2. **What is the cheapest set of defensive changes (firewall rules, link severances, network segmentations) that completely blocks every route to that asset?**
-   - Solved with the **Edmonds-Karp maximum flow algorithm** and the **Max-Flow Min-Cut Theorem** ($O(V \cdot E^2)$).
-
-The two algorithms are chained in a decision-support pipeline:
-$$\text{Dijkstra (Expose Weakness)} \longrightarrow \text{Edmonds-Karp (Compute Optimal Cut)} \longrightarrow \text{Dijkstra (Verify Target Isolation)}$$
-
-Dijkstra exposes the current vulnerability, Edmonds-Karp computes the minimum-cost fix, and Dijkstra is run again on the residual network to mathematically verify that the target is $100\%$ isolated ($d[target] = \infty$).
+> **Course:** Design and Analysis of Algorithms (DAA)  
+> **Team:** Muhammad Ibrahim (CT-24144) · Muhammad Daniyal Akbar (CT-24145)  
+> **Instructor:** Ms. Tooba Sheikh  
+> **Institution:** COMSATS University Islamabad  
 
 ---
 
-## 2. Problem Statement
-Organizations usually understand their network layout, but lack data-driven methods to identify which small set of links, firewall rules, or hosts to harden first. Blocking everything is operationally prohibitive, and blocking links at random leaves hidden attack vectors exposed. Attackers rarely strike the most heavily defended perimeter; they follow the path of least resistance from a compromised entry point toward high-value crown jewel databases and domain controllers.
+## Overview
 
-**NetCut** solves this problem by determining the most likely attack path and computing the minimum-cost cut set that severs all paths from threat entry to crown jewel, while respecting operational defense budgets.
+NETCUT is a **hybrid cybersecurity decision-support tool** that merges formal graph algorithms from the DAA curriculum with real network discovery and basic vulnerability assessment. It helps security analysts understand attack paths through a network, identify the cheapest set of defensive controls to block those paths, and prioritise remediation based on CVE severity.
 
----
-
-## 3. Algorithmic Architecture & Complexity
-
-### A. Attack Vector Discovery: Dijkstra's Algorithm
-- **Objective:** Find the directed path minimizing cumulative exploit difficulty $\sum_{(u, v) \in p} \mathcal{D}(u, v)$.
-- **Data Structure:** Binary min-heap priority queue (`heapq`).
-- **Time Complexity:** $\mathcal{O}((|V| + |E|) \log |V|)$
-- **Space Complexity:** $\mathcal{O}(|V| + |E|)$
-- **Output:** Path node sequence, cumulative resistance score, and individual step breakdown.
-
-### B. Defense Optimization: Edmonds-Karp Max-Flow / Min-Cut
-- **Objective:** Compute the minimum-capacity $s\text{-}t$ cut separating threat entry $s$ from critical asset $t$.
-- **Theorem:** By the **Max-Flow Min-Cut Theorem**, the value of the maximum network flow equals the capacity of the minimum $s\text{-}t$ cut:
-  $$|f^*| = c(S, T) = \sum_{u \in S, v \in T, (u, v) \in E} c(u, v)$$
-- **Method:** Breadth-First Search (BFS) finds augmenting paths with the minimum number of edges in the residual graph $G_f$, guaranteeing at most $\mathcal{O}(|V| \cdot |E|)$ augmentations.
-- **Time Complexity:** $\mathcal{O}(|V| \cdot |E|^2)$
-- **Space Complexity:** $\mathcal{O}(|V| + |E|)$
-- **Output:** Minimum defense cost, specific cut edges, and the $(S, T)$ graph partition ($S = \text{reachable from } s \text{ in } G_f$, $T = V \setminus S$).
-
-### C. Chained Verification & Budget Feasibility
-1. Compute pre-defense shortest path $P_{\text{pre}}$ and difficulty $D_{\text{pre}}$.
-2. Compute min-cut $C = \{(u, v) \in E \mid u \in S, v \notin S\}$.
-3. Form residual defense graph $G' = (V, E \setminus C)$.
-4. Run Dijkstra on $G'$ from $s$ to $t$:
-   - If path is empty and $d[t] = \infty \implies$ **VERIFIED SAFE**.
-   - If path exists $\implies$ **WARNING: RESIDUAL PATH DETECTED**.
-5. Compare total cut cost $\sum_{e \in C} c(e)$ against defense budget limit $B$.
+**It is a decision-support and educational tool — not a certified penetration-testing platform.**
 
 ---
 
-## 4. Professional Operations Dashboard Features
+## Feature Summary
 
-- **Cyber Dark Theme:** Obsidian palette, glowing cyber cyan, neon crimson threat indicators, laser orange cut styling, and emerald verification badges.
-- **No Roman Urdu / Informal Text:** Replaced all prototype strings with clean, industry-standard cybersecurity terminology.
-- **Topology Studio:**
-  - Dynamic host and connection manager.
-  - Interactive edge click-to-edit on the Cytoscape canvas.
-  - Threat entry, crown jewel target, and defense budget configuration.
-- **Interactive Preset Scenarios:**
-  - *Academic Benchmark Network* (DAA CCP 6-node topology)
-  - *Corporate Enterprise DMZ* (Perimeter, Active Directory, HR Portal, Finance Vault)
-  - *Cloud VPC & Kubernetes* (Ingress, AuthService, Redis Cache, Payment Gateway, PII DB)
-  - *Critical Infrastructure SCADA/ICS* (Engineering Workstation, Historian, PLC, Safety System)
-- **Cytoscape Visualizer with Multi-Layout Engine:**
-  - Hierarchical Directed Tree (Breadthfirst)
-  - Force-Directed Physics (CoSE)
-  - Concentric Rings & Grid Layouts
-  - Canvas Pan, Zoom, Center, and Fit controls
-- **Export & Reporting:**
-  - Export Topology Snapshot as high-resolution PNG.
-  - Export Network Graph as JSON.
-  - Generate and copy/download formatted Executive Security Audit Reports (.md).
-- **Dual-Engine Architecture:**
-  - Primary: Python REST API (`/api/analyze`).
-  - Standalone Offline Fallback: Built-in JavaScript implementation of Dijkstra and Edmonds-Karp enables the frontend to run with zero server setup if opened directly in a browser.
+| Capability | Description |
+|---|---|
+| **Graph Modeling** | Model any network as a weighted directed graph |
+| **Attack Path (Dijkstra)** | Find the shortest / least-resistance path from attacker to target |
+| **Min-Cut Defense (Edmonds-Karp)** | Identify the minimum set of edges to cut that blocks all attack paths |
+| **Budget Defense** | Greedy heuristic: block the most critical edges within a spending budget |
+| **Network Discovery** | Nmap-based scanning or zero-dependency socket fallback |
+| **Vulnerability Assessment** | CVE matching, CVSS severity, remediation recommendations |
+| **Graph Integration** | Discovered hosts auto-convert to graph nodes with risk-aware weights |
+| **Professional UI** | Dark SOC dashboard with 4 switchable themes, severity indicators, host detail drawer |
 
 ---
 
-## 5. Getting Started & Execution
+## DAA Algorithms Used
 
-### Option 1: Standalone Zero-Dependency Runner (Recommended)
-NetCut includes a standalone server that uses Python's standard library. No `pip install` required:
-```bash
-python server.py
-```
-Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** in any modern web browser.
+### 1. Dijkstra's Shortest Path — Attack Path Analysis
 
-### Option 2: FastAPI & Uvicorn Runner
-If you have FastAPI and Uvicorn installed:
-```bash
-uvicorn app.main:app --reload --port 8000
-```
+Finds the shortest (least exploit-resistance) path from the attacker entry point to the high-value target.
 
-### Option 3: Direct Browser Launch (Offline)
-Simply open `static/index.html` directly in Google Chrome, Microsoft Edge, or Firefox. The built-in client-side DAA engine will execute Dijkstra and Edmonds-Karp directly in the browser!
+- **Time complexity:** O((V + E) log V)
+- **Weight used:** `difficulty` — inversely proportional to CVE severity (Critical hosts have difficulty = 1.0)
+- **Why it fits:** Models the attacker preferring the path of least resistance through vulnerable hosts.
 
----
+### 2. Edmonds-Karp Max-Flow / Min-Cut — Defense Planning
 
-## 6. Running Unit Tests
+Implements the BFS-based augmenting-path algorithm to find maximum flow and derive the minimum cut.
 
-Run the full algorithm test suite directly with Python:
-```bash
-python -c "import tests.test_algorithms as t; [getattr(t, n)() for n in dir(t) if n.startswith('test_')]; print('All tests passed!')"
-```
-Or with pytest if installed:
-```bash
-pytest
-```
+- **Time complexity:** O(V · E²)
+- **Weight used:** `cost` — remediation / blocking cost per edge
+- **Min-Cut Theorem:** The minimum cost of edges to remove equals the maximum flow value. Removing the min-cut completely disconnects attacker from target.
+- **Locked edges:** Edges marked `blockable: false` receive a `BIG = 1e12` cost penalty, making them practically uncuttable.
+
+### 3. Greedy Budget Defense
+
+When a full min-cut exceeds the available budget, the greedy heuristic iteratively blocks the cheapest critical edge until the budget is exhausted or no more paths exist.
+
+- **Complexity:** O(k × (Dijkstra + Edmonds-Karp)) where k = iterations until budget depleted.
 
 ---
 
-## 7. Project Structure
+## Architecture
+
 ```
 NETCUT/
 ├── app/
+│   ├── main.py                 # Core API + computation pipeline
 │   ├── algorithms/
-│   │   ├── __init__.py
-│   │   ├── dijkstra.py          # Min-heap shortest attack path O((V+E) log V)
-│   │   └── edmonds_karp.py      # Max-flow min-cut algorithm O(V * E^2)
-│   ├── __init__.py
-│   └── main.py                  # FastAPI application & API endpoints
+│   │   ├── dijkstra.py         # Dijkstra shortest path
+│   │   ├── edmonds_karp.py     # BFS max-flow + min-cut
+│   │   └── budget.py           # Greedy budget defense heuristic
+│   ├── scanner/
+│   │   ├── detector.py         # Nmap availability detection
+│   │   ├── validator.py        # IP/CIDR security gate (injection prevention)
+│   │   ├── nmap_scanner.py     # Structured Nmap subprocess runner
+│   │   ├── socket_scanner.py   # Zero-dependency fallback scanner
+│   │   └── sample_scans.py     # Offline benchmark datasets
+│   └── vulnerability/
+│       ├── cve_database.py     # Curated CVE signature intelligence base
+│       ├── analyzer.py         # Service → CVE matching & severity classification
+│       └── graph_converter.py  # Assessment → NETCUT graph topology
 ├── static/
-│   ├── index.html               # Professional cyber operations dashboard
-│   ├── style.css                # Obsidian cyber dark design system
-│   ├── algorithms.js            # Standalone client-side DAA algorithm engine
-│   └── app.js                   # Application controller & Cytoscape engine
+│   ├── index.html              # Single-page application
+│   ├── app.js                  # Frontend logic
+│   ├── style.css               # Dark SOC theme engine (4 presets)
+│   └── algorithms.js           # Client-side algorithm visualisation helpers
 ├── tests/
-│   └── test_algorithms.py       # Unit tests for Dijkstra, Edmonds-Karp & Chaining
-├── server.py                    # Zero-dependency local server runner
-├── requirements.txt             # Python dependencies (for FastAPI/Uvicorn)
-└── README.md                    # DAA Complex Project Documentation
+│   ├── test_algorithms.py      # 12 Dijkstra / Edmonds-Karp / locked-edge tests
+│   ├── test_budget.py          # 6 greedy budget defense tests
+│   ├── test_frontend.py        # DOM ID alignment test
+│   ├── test_scanner.py         # 33 validator + detector + sample scan tests
+│   └── test_vulnerability.py   # 34 CVE + analyzer + graph-converter tests
+├── server.py                   # Zero-dependency HTTP server (std-lib only)
+├── run.py                      # Convenience launcher
+├── run_tests.py                # Master test runner (no pytest needed)
+└── run.bat                     # Windows one-click launcher
 ```
 
 ---
 
-## 8. Attribution & Academic Information
-- **Course:** Design and Analysis of Algorithms (DAA)
-- **Institution:** Department of Computer Science & Information Technology
-- **Team Lead:** Muhammad Ibrahim (CT-24144)
-- **Team Member:** Muhammad Daniyal Akbar (CT-24145)
-- **Course Instructor:** Ms. Tooba Sheikh
+## Installation
+
+### Requirements
+
+- **Python 3.9+** (Python 3.14 confirmed working)
+- No third-party Python packages required for the core server.
+- FastAPI + Uvicorn are **optional** (auto-detected; standard library fallback used if absent).
+
+### Install Nmap (Optional but Recommended)
+
+Nmap enables real-network host discovery and service version detection.  
+Without it, NETCUT uses a built-in socket scanner or offline sample datasets.
+
+**Windows:**
+```powershell
+winget install Insecure.Nmap
+# Or download the installer from: https://nmap.org/download.html
+```
+
+**Ubuntu / Debian:**
+```bash
+sudo apt update && sudo apt install -y nmap
+```
+
+**Fedora / RHEL:**
+```bash
+sudo dnf install -y nmap
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S nmap
+```
+
+**macOS:**
+```bash
+brew install nmap
+```
+
+After installing Nmap, restart the NETCUT server.
+
+---
+
+## Running NETCUT
+
+### Option 1 — Python (Recommended)
+
+```powershell
+cd "daa project/NETCUT"
+python run.py
+```
+
+### Option 2 — Windows Batch File
+
+Double-click `run.bat` or:
+
+```powershell
+.\run.bat
+```
+
+### Option 3 — Direct Server
+
+```powershell
+python server.py
+python server.py --port 8080
+python server.py --no-browser
+```
+
+The server binds to `0.0.0.0` and is accessible at:
+
+- **http://localhost:8000**
+- **http://127.0.0.1:8000**
+
+If port 8000 is busy, the server automatically tries the next available port.
+
+---
+
+## Running Tests
+
+```powershell
+python run_tests.py
+```
+
+Expected output: **86 tests, 86 passed, 0 failed.**
+
+Individual modules:
+
+```powershell
+python -m tests.test_algorithms
+python -m tests.test_budget
+python -m tests.test_frontend
+python -m tests.test_scanner
+python -m tests.test_vulnerability
+```
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/health` | Server health check |
+| GET | `/api/presets` | Pre-built network topology presets |
+| GET | `/api/scanner/status` | Nmap availability + version |
+| GET | `/api/scanner/samples` | Available offline sample scan datasets |
+| POST | `/api/analyze` | Run Dijkstra + Edmonds-Karp + budget defense on a graph |
+| POST | `/api/scanner/scan` | Perform live network scan (Nmap or socket fallback) |
+| POST | `/api/scanner/load-sample` | Load a sample scan + run full vulnerability assessment |
+
+---
+
+## Using the Discovery & CVE Tab
+
+### Performing a Scan
+
+1. Click the **Discovery & CVE** tab.
+2. Enter a target:
+   - Single IP: `192.168.1.10`
+   - CIDR subnet (max /24): `192.168.1.0/24`
+   - Hostname: `my-server.local`
+3. Read and acknowledge the **authorisation warning**.
+4. Click **Scan**.
+
+> **You must have explicit written permission to scan any network or device you do not personally own.**
+
+### Using Sample Scans
+
+Click **Corporate Subnet**, **Cloud VPC**, or **Hardened Network** to load a realistic pre-built dataset without requiring Nmap or network access.
+
+### Importing into the Graph
+
+After a scan, click **Import to Graph** to automatically convert discovered hosts into a NETCUT graph topology. The graph pre-assigns:
+
+- **Difficulty weights** based on CVE severity (Critical = 1.0, Hardened = 8.0)
+- **Cut costs** based on remediation complexity
+- **Entry node**: Perimeter Gateway (external attacker)
+- **Target node**: Highest risk host
+
+Then run Dijkstra and Min-Cut from the **Analysis** tab.
+
+---
+
+## Vulnerability Assessment
+
+### How CVE Matching Works
+
+NETCUT maintains a curated signature database (`app/vulnerability/cve_database.py`) of known CVEs for common network services. For each discovered service, the analyzer:
+
+1. Matches the service name, product pattern, and version pattern against each signature using regex.
+2. Optionally runs an `affected_check` function for fine-grained version range logic.
+3. Assigns the highest-severity matching CVE finding to the host.
+4. If no high-severity CVE matches, generates an **Informational** finding noting the open port.
+
+### Severity Levels
+
+| Level | CVSS Range | Color |
+|---|---|---|
+| Critical | 9.0 – 10.0 | 🔴 `#FB7185` |
+| High | 7.0 – 8.9 | 🟠 `#FB923C` |
+| Medium | 4.0 – 6.9 | 🟡 `#F59E0B` |
+| Low | 0.1 – 3.9 | 🔵 `#60A5FA` |
+| Informational | 0.0 | 🟢 `#34D399` |
+
+### CVE Intelligence in This Build
+
+| CVE ID | Service | Severity | Description |
+|---|---|---|---|
+| CVE-2024-6387 | OpenSSH ≤ 9.7 | Critical | regreSSHion — unauthenticated RCE |
+| CVE-2023-38408 | OpenSSH < 9.3p2 | High | PKCS#11 agent code execution |
+| CVE-2021-41773 | Apache 2.4.49/50 | Critical | Path traversal + RCE |
+| CVE-2022-31813 | Apache 2.4 < 2.4.54 | Medium | X-Forwarded-For bypass |
+| CVE-2011-2523 | vsftpd 2.3.4 | Critical | Backdoor RCE |
+| CVE-2015-3306 | ProFTPD < 1.3.5 | Critical | Mod_copy arbitrary write |
+| CVE-2017-7494 | Samba < 4.6.4 | Critical | SambaCry RCE |
+| CVE-2017-0144 | SMB/Samba | Critical | EternalBlue |
+| CVE-2019-0708 | RDP < Win10/Server2019 | Critical | BlueKeep RCE |
+| CVE-2022-0543 | Redis Debian packages | Critical | Lua sandbox escape |
+| — | Telnet | High | Cleartext credential exposure |
+| — | FTP | Medium | Cleartext protocol warning |
+
+---
+
+## Known Limitations & Ethical Use
+
+### Limitations
+
+- **Version-based matching only.** NETCUT does not exploit or verify vulnerabilities — it identifies potential risk based on detected service versions. False positives and false negatives are inherent in this approach.
+- **Small CVE database.** The built-in signature set covers representative high-impact CVEs. It is not a comprehensive scanner like Tenable Nessus or OpenVAS.
+- **No credential scanning.** NETCUT never attempts authentication, brute-force, or exploitation.
+- **Scan size limit.** Maximum scan target is a /24 subnet (256 hosts). Larger networks must be scanned in segments.
+- **Nmap is optional.** Without Nmap, only the top 20 TCP ports are probed via raw sockets; service version detection is unavailable.
+- **No CVE database auto-update.** The included CVE signatures are static. Update `cve_database.py` manually to add new CVEs.
+
+### Ethical Use
+
+> ⚠️ **NETCUT must only be used on networks and systems you own or have explicit, written authorization to assess.**
+>
+> Unauthorized scanning or probing of computer systems is illegal under the Computer Fraud and Abuse Act (CFAA), the Computer Misuse Act (UK), and equivalent laws worldwide.
+>
+> This tool is built for educational use in an academic DAA course. Any real-world use is the sole responsibility of the operator.
+
+---
+
+## UI Themes
+
+Switch themes using the palette icon in the top-right header:
+
+| Theme | Description |
+|---|---|
+| **Cyber Cyan** | Default SOC teal/cyan palette |
+| **Neon Violet** | Purple/violet accents |
+| **Emerald Ops** | Green operational theme |
+| **Crimson Alert** | Red high-alert theme |
+
+Theme choice is persisted in browser `localStorage`.
+
+---
+
+## Project Attribution
+
+This project was developed as a Complex Engineering Project (CEP) for the Design and Analysis of Algorithms course at COMSATS University Islamabad.
+
+| Role | Name | ID |
+|---|---|---|
+| Developer | Muhammad Ibrahim | CT-24144 |
+| Developer | Muhammad Daniyal Akbar | CT-24145 |
+| Instructor | Ms. Tooba Sheikh | — |
