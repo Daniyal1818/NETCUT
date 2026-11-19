@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"><title>NetCut</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<style>
+  body{font-family:sans-serif;margin:0;display:flex;height:100vh}
+  #cy{flex:1}
+  #panel{width:320px;padding:12px;border-left:1px solid #ccc;overflow:auto}
+  button{display:block;width:100%;margin:6px 0;padding:8px}
+</style>
+</head>
+<body>
+<div id="cy"></div>
+<div id="panel">
+  <h3>NetCut</h3>
+  <button id="btnPath">1. Find attack path</button>
+  <button id="btnCut">2. Compute min-cut</button>
+  <button id="btnVerify">3. Apply fix &amp; verify</button>
+  <pre id="out"></pre>
+</div>
+<script>
+const net = {
+  nodes: ["Laptop","Workstation","Mail","FileServer","AppServer","DB"],
+  edges: [
+    {src:"Laptop",dst:"Workstation",difficulty:2,cost:4},
+    {src:"Laptop",dst:"Mail",difficulty:1,cost:3},
+    {src:"Workstation",dst:"FileServer",difficulty:3,cost:5},
+    {src:"Mail",dst:"FileServer",difficulty:4,cost:2},
+    {src:"Mail",dst:"AppServer",difficulty:5,cost:3},
+    {src:"FileServer",dst:"DB",difficulty:2,cost:6},
+    {src:"AppServer",dst:"DB",difficulty:1,cost:2}
+  ],
+  entry:"Laptop", target:"DB"
+};
+
+const cy = cytoscape({
+  container: document.getElementById("cy"),
+  elements: [
+    ...net.nodes.map(id => ({data:{id}})),
+    ...net.edges.map(e => ({data:{id:e.src+"->"+e.dst, source:e.src, target:e.dst,
+                                  label:`diff ${e.difficulty} / cost ${e.cost}`}}))
+  ],
+  style: [
+    {selector:"node", style:{label:"data(id)", "background-color":"#4a90d9", color:"#222"}},
+    {selector:"edge", style:{label:"data(label)", "font-size":9, width:2, "curve-style":"bezier",
+                             "target-arrow-shape":"triangle", "line-color":"#aaa", "target-arrow-color":"#aaa"}},
+    {selector:".path", style:{"line-color":"red","target-arrow-color":"red", width:4}},
+    {selector:".cut", style:{"line-color":"orange","target-arrow-color":"orange", width:4, "line-style":"dashed"}},
+    {selector:".removed", style:{opacity:0.15}}
+  ],
+  layout:{name:"breadthfirst", directed:true, roots:"#"+net.entry}
+});
+
+let result = null;
+async function getResult(){
+  if(!result){
+    const r = await fetch("/api/analyze",{method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(net)});
+    result = await r.json();
+  }
+  return result;
+}
+const out = document.getElementById("out");
+
+document.getElementById("btnPath").onclick = async () => {
+  const r = await getResult();
+  cy.elements().removeClass("path cut removed");
+  for(let i=0;i<r.attack_path.length-1;i++)
+    cy.getElementById(r.attack_path[i]+"->"+r.attack_path[i+1]).addClass("path");
+  out.textContent = `Attack path: ${r.attack_path.join(" → ")}\nTotal difficulty: ${r.attack_difficulty}`;
+};
+document.getElementById("btnCut").onclick = async () => {
+  const r = await getResult();
+  cy.elements().removeClass("path cut removed");
+  r.cut_edges.forEach(e => cy.getElementById(e.src+"->"+e.dst).addClass("cut"));
+  out.textContent = `Edges to cut:\n` + r.cut_edges.map(e=>`${e.src} → ${e.dst} (cost ${e.cost})`).join("\n")
+                  + `\nTotal defense cost: ${r.cut_cost}`;
+};
+document.getElementById("btnVerify").onclick = async () => {
+  const r = await getResult();
+  r.cut_edges.forEach(e => cy.getElementById(e.src+"->"+e.dst).addClass("removed"));
+  out.textContent = r.verified ? "Verified: no attack path remains."
+                               : "Still reachable via: " + r.path_after_fix.join(" → ");
+};
+</script>
+</body>
+</html>
