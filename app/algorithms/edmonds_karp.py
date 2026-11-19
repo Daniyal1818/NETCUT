@@ -1,13 +1,18 @@
 from collections import deque
 
+BIG = 1e12   # locked (non-blockable) edge ki "infinite" capacity
+
+
 def edmonds_karp(nodes, edges, source, sink):
     res = {n: {} for n in nodes}
     for e in edges:
-        u, v, c = e["src"], e["dst"], e["cost"]
+        u, v = e["src"], e["dst"]
+        c = e["cost"] if e.get("blockable", True) else BIG
         res[u][v] = res[u].get(v, 0) + c
         res[v].setdefault(u, 0)
 
     max_flow = 0
+    parent = {source: None}
     while True:
         parent = {source: None}
         q = deque([source])

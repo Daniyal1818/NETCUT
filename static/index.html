@@ -7,7 +7,7 @@
 <style>
   body{font-family:sans-serif;margin:0;display:flex;height:100vh}
   #cy{flex:1;background:#fafafa}
-  #panel{width:340px;padding:12px;border-left:1px solid #ccc;overflow:auto;font-size:14px}
+  #panel{width:350px;padding:12px;border-left:1px solid #ccc;overflow:auto;font-size:14px}
   fieldset{margin:0 0 10px;border:1px solid #ddd;border-radius:6px}
   legend{font-weight:bold}
   input,select{width:100%;box-sizing:border-box;margin:3px 0;padding:5px}
@@ -40,29 +40,32 @@
       <input id="diff" type="number" min="0" step="any" placeholder="Difficulty" value="1">
       <input id="cost" type="number" min="0" step="any" placeholder="Cost" value="1">
     </div>
+    <label><input id="blockable" type="checkbox" checked style="width:auto"> Blockable (cut ho sakta hai)</label>
     <button id="btnSaveEdge">Add / update edge</button>
-    <small>Edge par click karo to uski values yahan aa jayengi, badal ke dobara dabao.</small>
+    <small>Edge par click karo to values yahan aa jayengi. Locked edge par 🔒 nazar aayega.</small>
   </fieldset>
 
   <fieldset>
     <legend>3. Delete</legend>
     <button id="btnDelete">Selected node/edge delete karo</button>
-    <small>Node ya edge par click karke select karo (Shift + click se kai).</small>
+    <small>Click se select karo (Shift + click se kai).</small>
   </fieldset>
 
   <fieldset>
-    <legend>4. Attacker aur target</legend>
+    <legend>4. Attacker, target aur budget</legend>
     <label>Entry (attacker yahan se shuru)</label>
     <select id="entry"></select>
     <label>Target (crown jewel)</label>
     <select id="target"></select>
+    <label>Defense budget</label>
+    <input id="budget" type="number" min="0" step="any" placeholder="Khali = unlimited">
   </fieldset>
 
   <div id="msg"></div>
 
   <button id="btnPath">A. Find attack path</button>
-  <button id="btnCut">B. Compute min-cut</button>
-  <button id="btnVerify">C. Apply fix &amp; verify</button>
+  <button id="btnCut">B. Compute defense plan</button>
+  <button id="btnVerify">C. Apply plan &amp; verify</button>
   <pre id="out"></pre>
 
   <div class="row">
@@ -75,13 +78,13 @@
 const SAMPLE = {
   nodes: ["Laptop","Workstation","Mail","FileServer","AppServer","DB"],
   edges: [
-    {src:"Laptop",dst:"Workstation",difficulty:2,cost:4},
-    {src:"Laptop",dst:"Mail",difficulty:1,cost:3},
-    {src:"Workstation",dst:"FileServer",difficulty:3,cost:5},
-    {src:"Mail",dst:"FileServer",difficulty:4,cost:2},
-    {src:"Mail",dst:"AppServer",difficulty:5,cost:3},
-    {src:"FileServer",dst:"DB",difficulty:2,cost:6},
-    {src:"AppServer",dst:"DB",difficulty:1,cost:2}
+    {src:"Laptop",dst:"Workstation",difficulty:2,cost:4,blockable:true},
+    {src:"Laptop",dst:"Mail",difficulty:1,cost:3,blockable:true},
+    {src:"Workstation",dst:"FileServer",difficulty:3,cost:5,blockable:true},
+    {src:"Mail",dst:"FileServer",difficulty:4,cost:2,blockable:true},
+    {src:"Mail",dst:"AppServer",difficulty:5,cost:3,blockable:true},
+    {src:"FileServer",dst:"DB",difficulty:2,cost:6,blockable:true},
+    {src:"AppServer",dst:"DB",difficulty:1,cost:2,blockable:true}
   ],
   entry:"Laptop", target:"DB"
 };
@@ -89,6 +92,7 @@ const SAMPLE = {
 const $ = id => document.getElementById(id);
 const out = $("out");
 let result = null;
+const fmt = n => (n === null || n === undefined) ? "-" : (Number.isInteger(n) ? String(n) : n.toFixed(2));
 
 const cy = cytoscape({
   container: $("cy"),
@@ -150,18 +154,18 @@ function afterChange(){
   msg("");
 }
 
-function addEdge(src, dst, d, c){
+function addEdge(src, dst, d, c, blockable){
   const id = src + "->" + dst;
-  const label = `diff ${d} / cost ${c}`;
+  const label = `diff ${d} / cost ${c}` + (blockable ? "" : " 🔒");
   const ex = cy.getElementById(id);
-  if (ex.length) ex.data({difficulty:d, cost:c, label});
-  else cy.add({data:{id, source:src, target:dst, difficulty:d, cost:c, label}});
+  if (ex.length) ex.data({difficulty:d, cost:c, blockable, label});
+  else cy.add({data:{id, source:src, target:dst, difficulty:d, cost:c, blockable, label}});
 }
 
 function loadNetwork(n){
   cy.elements().remove();
   n.nodes.forEach(id => cy.add({data:{id}}));
-  n.edges.forEach(e => addEdge(e.src, e.dst, e.difficulty, e.cost));
+  n.edges.forEach(e => addEdge(e.src, e.dst, e.difficulty, e.cost, e.blockable !== false));
   cy.layout({name:"breadthfirst", directed:true, roots:cy.getElementById(n.entry), padding:30}).run();
   refreshSelects(n.entry, n.target);
   resetResult();
@@ -174,13 +178,23 @@ function readNum(id, label){
   return v;
 }
 
+function readBudget(){
+  const raw = $("budget").value.trim();
+  if (raw === "") return null;
+  const v = parseFloat(raw);
+  if (isNaN(v) || v < 0){ msg("Budget 0 ya us se bara number hona chahiye"); return undefined; }
+  return v;
+}
+
 function currentNetwork(){
   return {
     nodes: cy.nodes().map(n => n.id()),
     edges: cy.edges().map(e => ({src:e.data("source"), dst:e.data("target"),
-                                 difficulty:e.data("difficulty"), cost:e.data("cost")})),
+                                 difficulty:e.data("difficulty"), cost:e.data("cost"),
+                                 blockable:e.data("blockable")})),
     entry: $("entry").value,
-    target: $("target").value
+    target: $("target").value,
+    budget: null
   };
 }
 
@@ -190,6 +204,9 @@ async function getResult(){
   const net = currentNetwork();
   if (net.nodes.length < 2){ msg("Kam az kam 2 nodes chahiye"); return null; }
   if (net.entry === net.target){ msg("Entry aur target alag hone chahiye"); return null; }
+  const b = readBudget();
+  if (b === undefined) return null;
+  net.budget = b;
   try{
     const r = await fetch("/api/analyze", {method:"POST",
       headers:{"Content-Type":"application/json"}, body:JSON.stringify(net)});
@@ -222,7 +239,7 @@ $("btnSaveEdge").onclick = () => {
   if (s === t) return msg("Node se khud tak edge allowed nahi");
   const d = readNum("diff", "Difficulty"); if (d === null) return;
   const c = readNum("cost", "Cost"); if (c === null) return;
-  addEdge(s, t, d, c);
+  addEdge(s, t, d, c, $("blockable").checked);
   afterChange();
 };
 
@@ -239,9 +256,11 @@ cy.on("tap", "edge", evt => {
   $("edgeTo").value = e.data("target");
   $("diff").value = e.data("difficulty");
   $("cost").value = e.data("cost");
+  $("blockable").checked = e.data("blockable") !== false;
 });
 
 $("entry").onchange = $("target").onchange = () => { resetResult(); markEndpoints(); };
+$("budget").oninput = () => { resetResult(); msg(""); };
 $("btnSample").onclick = () => loadNetwork(SAMPLE);
 $("btnClear").onclick = () => { cy.elements().remove(); afterChange(); };
 
@@ -252,26 +271,48 @@ $("btnPath").onclick = async () => {
   if (!r.attack_path.length){ out.textContent = "Entry se target tak koi attack path nahi hai."; return; }
   for (let i = 0; i < r.attack_path.length - 1; i++)
     cy.getElementById(r.attack_path[i] + "->" + r.attack_path[i+1]).addClass("path");
-  out.textContent = `Attack path:\n${r.attack_path.join(" → ")}\nTotal difficulty: ${r.attack_difficulty}`;
+  out.textContent = `Attack path:\n${r.attack_path.join(" → ")}\nTotal difficulty: ${fmt(r.attack_difficulty)}`;
 };
 
 $("btnCut").onclick = async () => {
   const r = await getResult(); if (!r) return;
   cy.elements().removeClass("path cut removed");
-  if (!r.cut_edges.length){ out.textContent = "Koi path hi nahi hai, to cut ki zaroorat nahi."; return; }
-  r.cut_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("cut"));
-  out.textContent = "Edges to cut:\n" +
-    r.cut_edges.map(e => `${e.src} → ${e.dst} (cost ${e.cost})`).join("\n") +
-    `\nTotal defense cost: ${r.cut_cost}`;
+  if (!r.attack_path.length){ out.textContent = "Koi attack path hi nahi hai, defense ki zaroorat nahi."; return; }
+  r.defense_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("cut"));
+
+  const list = r.defense_edges.length
+    ? r.defense_edges.map(e => `${e.src} → ${e.dst} (cost ${fmt(e.cost)})`).join("\n")
+    : "(koi edge budget mein afford nahi ho saka)";
+
+  let head;
+  if (r.strategy === "min_cut"){
+    head = "OPTIMAL min-cut plan: attacker ke saare raaste band.";
+  } else if (r.min_cut_cost === null){
+    head = "Kuch links locked hain, is liye poora block mumkin nahi.\nBest-effort greedy plan:";
+  } else {
+    head = `Budget (${fmt(r.budget)}) min-cut cost (${fmt(r.min_cut_cost)}) se kam hai, poora block mumkin nahi.\n` +
+           `Kami: ${fmt(r.shortfall)}\nBudget ke andar greedy plan:`;
+  }
+  let text = `${head}\n${list}\nTotal defense cost: ${fmt(r.defense_cost)}`;
+  if (r.strategy === "greedy"){
+    text += `\nAttacker difficulty: ${fmt(r.attack_difficulty)} → ` +
+            (r.verified ? "koi raasta nahi" : fmt(r.difficulty_after_fix));
+  }
+  out.textContent = text;
 };
 
 $("btnVerify").onclick = async () => {
   const r = await getResult(); if (!r) return;
   cy.elements().removeClass("path cut removed");
-  r.cut_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("removed"));
-  out.textContent = !r.attack_path.length ? "Pehle se koi attack path nahi tha."
-    : r.verified ? "Verified: cut ke baad koi attack path nahi bacha."
-    : "Abhi bhi raasta hai: " + r.path_after_fix.join(" → ");
+  r.defense_edges.forEach(e => cy.getElementById(e.src + "->" + e.dst).addClass("removed"));
+  if (!r.attack_path.length){
+    out.textContent = "Pehle se koi attack path nahi tha.";
+  } else if (r.verified){
+    out.textContent = "Verified: plan ke baad koi attack path nahi bacha.";
+  } else {
+    out.textContent = `Attacker abhi bhi pohanch sakta hai:\n${r.path_after_fix.join(" → ")}\n` +
+                      `Difficulty: ${fmt(r.attack_difficulty)} → ${fmt(r.difficulty_after_fix)}`;
+  }
 };
 
 loadNetwork(SAMPLE);
